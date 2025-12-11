@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <title>Chesshire Cat</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/png" href="ChesshireCat.png">
+<link rel="apple-touch-icon" sizes="180x180" href="ChesshireCat.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Chesshire Cat">
+<meta name="theme-color" content="#1a1a2e">
+
+<!-- PWA manifest (for Android/desktop). Optional but recommended if you add manifest.webmanifest -->
+<link rel="manifest" href="manifest.webmanifest">
 <style>
 /* ---------- Layout ---------- */
 body{
@@ -20,8 +29,7 @@ header{
   border-bottom: 1px solid #0f3460;
   box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
-header h1{
-  margin:0;font-size:1.4rem;display:flex;align-items:center;gap:0.5rem;flex:1;
+header h1{margin:0;font-size:1.4rem;display:flex;align-items:center;gap:0.5rem;flex:1;
   background: linear-gradient(90deg, #e94560, #f39422);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -51,8 +59,7 @@ header button:hover{
 }
 header label{color:#a2a2c2;font-size:0.9rem;}
 #skillLabel{color:#e94560;font-weight:bold;min-width:80px;}
-main{
-  flex:1;display:flex;justify-content:center;align-items:center;
+main{flex:1;display:flex;justify-content:center;align-items:center;
   background:radial-gradient(ellipse at center, #16213e 0%, #1a1a2e 100%);
   overflow:auto;
 }
@@ -65,7 +72,7 @@ main{
   box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 .highlight{background:rgba(233,69,96,0.5)!important;cursor:pointer;}
-.crown{font-size:0.8rem;vertical-align:middle;margin-left:2px;}
+.crown{font-size:0.9rem;vertical-align:middle;margin-left:1px;}
 
 /* ---------- Chessboard ---------- */
 .chessboard{
@@ -88,32 +95,18 @@ main{
 .chessboard .square.selected{background:rgba(233,69,96,0.6)!important;}
 .chessboard .square.legal-move{background:rgba(100,200,100,0.5)!important;}
 .chessboard .square.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
-.chessboard .piece{transition:transform 0.1s;}
+.chessboard .piece{cursor:grab;transition:transform 0.1s;}
+.chessboard .piece:active{cursor:grabbing;transform:scale(1.15);}
+.chessboard .piece.dragging{opacity:0.5;}
 
 /* ---------- Checkers ---------- */
-table.checkers{
-  border-collapse:collapse;
-  border-radius:4px;
-  overflow:hidden;
-  table-layout:fixed;
-}
-table.checkers td{
-  width:45px;height:45px;
-  text-align:center;vertical-align:middle;font-size:32px;
-  padding:0;
+table.checkers{border-collapse:collapse;border-radius:4px;overflow:hidden;}
+table.checkers td{width:45px;height:45px;text-align:center;vertical-align:middle;font-size:32px;
   transition: background 0.15s;
-  overflow:hidden;
 }
 .light{background:#f0d9b5;}
 .dark{background:#b58863;}
-table.checkers .piece{
-  cursor:pointer;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  width:100%;
-  height:100%;
-}
+.piece{cursor:pointer;}
 
 /* Status display */
 .status{
@@ -146,18 +139,15 @@ table.checkers .piece{
 
     <label for="mode">Mode:</label>
     <select id="mode">
-      <option value="chess">Chess</option>
-      <option value="checkers">Checkers</option>
+      <option value="chess">Chess (vs AI)</option>
+      <option value="checkers">Checkers (vs AI)</option>
+      <option value="chess2p">Chess (2 players)</option>
+      <option value="checkers2p">Checkers (2 players)</option>
     </select>
 
-    <label for="opponent">Opponent:</label>
-    <select id="opponent">
-      <option value="computer">Computer</option>
-      <option value="human">2 Players</option>
-    </select>
 
     <label for="skill">Skill:</label>
-    <input type="range" id="skill" min="1" max="5" value="2">
+    <input type="range" id="skill" min="1" max="5" value="1">
     <span id="skillLabel">Medium</span>
 
     <button id="newGame">New Game</button>
@@ -830,13 +820,10 @@ class Chess {
 /* ==========================================================
    GLOBAL UI STATE
    ========================================================== */
-var modeSelect   = document.getElementById('mode');
-var opponentSelect = document.getElementById('opponent');
-var skillSlider  = document.getElementById('skill');
-var skillLabel   = document.getElementById('skillLabel');
-var newGameBtn   = document.getElementById('newGame');
-
-var opponentMode = opponentSelect.value; // "computer" or "human"
+const modeSelect   = document.getElementById('mode');
+const skillSlider  = document.getElementById('skill');
+const skillLabel   = document.getElementById('skillLabel');
+const newGameBtn   = document.getElementById('newGame');
 
 function setSkillLabel(v){
   var names = ['Very Easy','Easy','Medium','Hard','Very Hard'];
@@ -1502,7 +1489,7 @@ function evaluateCheckers(boardState){
    GLOBAL INITIALIZATION
    ========================================================== */
 function initGame(){
-  if (modeSelect.value === 'chess'){
+  if (modeSelect.value === 'chess' || modeSelect.value === 'chess2p'){
     initChess();
   } else {
     initCheckers();
@@ -1511,6 +1498,18 @@ function initGame(){
 initGame();
 newGameBtn.addEventListener('click', initGame);
 </script>
+
+<script>
+// Simple service worker registration for offline support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => {
+      console.error('Service worker registration failed:', err);
+    });
+  });
+}
+</script>
+
 </body>
 </html>
 
