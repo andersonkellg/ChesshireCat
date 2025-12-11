@@ -1,15 +1,15 @@
 {
   "name": "Chesshire Cat",
   "short_name": "Chesshire Cat",
-  "start_url": "./ChesshireCat.html",
-  "display": "standalone",
-  "background_color": "#1a1a2e",
-  "theme_color": "#1a1a2e",
   "icons": [
     {
       "src": "ChesshireCat.png",
-      "sizes": "512x512",
+      "sizes": "180x180",
       "type": "image/png"
     }
-  ]
+  ],
+  "start_url": "ChesshireCat.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e"
 }
