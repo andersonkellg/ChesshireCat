@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chesshire Cat</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+/* ---------- Layout ---------- */
+body{
+  font-family:Arial,sans-serif;
+  background:#1a1a2e;
+  margin:0;padding:0;
+  overflow:hidden;
+}
+#app{display:flex;flex-direction:column;height:100vh;}
+header{
+  background:linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+  color:#fff;padding:0.6rem 1rem;
+  display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;
+  border-bottom: 1px solid #0f3460;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+header h1{
+  margin:0;font-size:1.4rem;display:flex;align-items:center;gap:0.5rem;flex:1;
+  background: linear-gradient(90deg, #e94560, #f39422);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+header select, header input[type="range"]{
+  margin-left:0.3rem;
+  background:#0f3460;
+  color:#fff;
+  border:1px solid #e94560;
+  border-radius:4px;
+  padding:0.3rem 0.5rem;
+}
+header button{
+  background: linear-gradient(135deg, #e94560 0%, #c73659 100%);
+  color:#fff;
+  border:none;
+  border-radius:4px;
+  padding:0.4rem 1rem;
+  cursor:pointer;
+  font-weight:bold;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+header button:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(233,69,96,0.4);
+}
+header label{color:#a2a2c2;font-size:0.9rem;}
+#skillLabel{color:#e94560;font-weight:bold;min-width:80px;}
+main{
+  flex:1;display:flex;justify-content:center;align-items:center;
+  background:radial-gradient(ellipse at center, #16213e 0%, #1a1a2e 100%);
+  overflow:auto;
+}
+.tab{display:none;flex-direction:column;align-items:center;width:100%;height:100%;overflow:auto;padding:1rem;}
+.tab.active{display:flex;}
+.board-container{
+  background: #0f3460;
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.highlight{background:rgba(233,69,96,0.5)!important;cursor:pointer;}
+.crown{font-size:0.8rem;vertical-align:middle;margin-left:2px;}
+
+/* ---------- Chessboard ---------- */
+.chessboard{
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  width:360px;height:360px;
+  border-radius:4px;
+  overflow:hidden;
+}
+.chessboard .square{
+  width:45px;height:45px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:36px;
+  cursor:pointer;
+  transition: background 0.15s;
+  user-select:none;
+}
+.chessboard .white-sq{background:#f0d9b5;}
+.chessboard .black-sq{background:#b58863;}
+.chessboard .square.selected{background:rgba(233,69,96,0.6)!important;}
+.chessboard .square.legal-move{background:rgba(100,200,100,0.5)!important;}
+.chessboard .square.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
+.chessboard .piece{transition:transform 0.1s;}
+
+/* ---------- Checkers ---------- */
+table.checkers{
+  border-collapse:collapse;
+  border-radius:4px;
+  overflow:hidden;
+  table-layout:fixed;
+}
+table.checkers td{
+  width:45px;height:45px;
+  text-align:center;vertical-align:middle;font-size:32px;
+  padding:0;
+  transition: background 0.15s;
+  overflow:hidden;
+}
+.light{background:#f0d9b5;}
+.dark{background:#b58863;}
+table.checkers .piece{
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  height:100%;
+}
+
+/* Status display */
+.status{
+  margin-top:1rem;
+  padding:0.6rem 1.2rem;
+  background:rgba(15,52,96,0.8);
+  border-radius:20px;
+  color:#fff;
+  font-size:0.95rem;
+  border: 1px solid #e94560;
+}
+.status.gameover{
+  background: linear-gradient(135deg, #e94560 0%, #c73659 100%);
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(233,69,96,0.4);}
+  50%{box-shadow:0 0 0 10px rgba(233,69,96,0);}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>♞ Chesshire Cat ♞</h1>
+    <!-- LOGO -->
+    <img id="logo"
+         src="data:image/png;base64,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"
+         alt="Logo">
+
+    <label for="mode">Mode:</label>
+    <select id="mode">
+      <option value="chess">Chess</option>
+      <option value="checkers">Checkers</option>
+    </select>
+
+    <label for="opponent">Opponent:</label>
+    <select id="opponent">
+      <option value="computer">Computer</option>
+      <option value="human">2 Players</option>
+    </select>
+
+    <label for="skill">Skill:</label>
+    <input type="range" id="skill" min="1" max="5" value="2">
+    <span id="skillLabel">Medium</span>
+
+    <button id="newGame">New Game</button>
+  </header>
+
+  <main>
+    <!-- ---------- Chess tab ---------- -->
+    <section id="chessTab" class="tab active">
+      <div class="board-container">
+        <div id="board" class="chessboard"></div>
+      </div>
+      <div id="chessStatus" class="status">Your turn (White)</div>
+    </section>
+
+    <!-- ---------- Checkers tab ---------- -->
+    <section id="checkersTab" class="tab">
+      <div class="board-container">
+        <div id="checkersBoard"></div>
+      </div>
+      <div id="checkersStatus" class="status">Your turn (White)</div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* ==========================================================
+   CHESS ENGINE (no optional chaining, Safari-friendly)
+   ========================================================== */
+class Chess {
+  constructor(fen) {
+    this.SYMBOLS = 'pnbrqkPNBRQK';
+    this.DEFAULT_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    this.PAWN = 'p'; this.KNIGHT = 'n'; this.BISHOP = 'b';
+    this.ROOK = 'r'; this.QUEEN = 'q'; this.KING = 'k';
+    this.WHITE = 'w'; this.BLACK = 'b';
+    
+    this.SQUARES = {};
+    var files = 'abcdefgh';
+    for (var i = 0; i < 8; i++) {
+      for (var j = 0; j < 8; j++) {
+        this.SQUARES[files[j] + (8 - i)] = i * 8 + j;
+      }
+    }
+    
+    this.board_array = new Array(64).fill(null);
+    this.turn_color = this.WHITE;
+    this.castling = { K: true, Q: true, k: true, q: true };
+    this.ep_square = null;
+    this.half_moves = 0;
+    this.full_moves = 1;
+    this.history_stack = [];
+    this.game_over_flag = false;
+    
+    this.load(fen || this.DEFAULT_FEN);
+  }
+
+  load(fen) {
+    var parts = fen.split(/\s+/);
+    var rows = parts[0].split('/');
+    
+    this.board_array = new Array(64).fill(null);
+    var sq = 0;
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r];
+      for (var k = 0; k < row.length; k++) {
+        var c = row[k];
+        if (/\d/.test(c)) {
+          sq += parseInt(c,10);
+        } else {
+          var color = c === c.toUpperCase() ? this.WHITE : this.BLACK;
+          this.board_array[sq] = { type: c.toLowerCase(), color: color };
+          sq++;
+        }
+      }
+    }
+    
+    this.turn_color = parts[1] || this.WHITE;
+    this.castling = { K: false, Q: false, k: false, q: false };
+    if (parts[2] && parts[2] !== '-') {
+      for (var x = 0; x < parts[2].length; x++) {
+        var cc = parts[2][x];
+        this.castling[cc] = true;
+      }
+    }
+    this.ep_square = parts[3] === '-' ? null : parts[3];
+    this.half_moves = parseInt(parts[4],10) || 0;
+    this.full_moves = parseInt(parts[5],10) || 1;
+    this.history_stack = [];
+    this.game_over_flag = false;
+  }
+
+  fen() {
+    var fen = '';
+    for (var r = 0; r < 8; r++) {
+      var empty = 0;
+      for (var c = 0; c < 8; c++) {
+        var p = this.board_array[r * 8 + c];
+        if (!p) {
+          empty++;
+        } else {
+          if (empty) { fen += empty; empty = 0; }
+          fen += p.color === this.WHITE ? p.type.toUpperCase() : p.type;
+        }
+      }
+      if (empty) fen += empty;
+      if (r < 7) fen += '/';
+    }
+    fen += ' ' + this.turn_color;
+    var castleStr = '';
+    if (this.castling.K) castleStr += 'K';
+    if (this.castling.Q) castleStr += 'Q';
+    if (this.castling.k) castleStr += 'k';
+    if (this.castling.q) castleStr += 'q';
+    fen += ' ' + (castleStr || '-');
+    fen += ' ' + (this.ep_square || '-');
+    fen += ' ' + this.half_moves + ' ' + this.full_moves;
+    return fen;
+  }
+
+  _sq2idx(sq) { return this.SQUARES[sq]; }
+  _idx2sq(idx) {
+    var file = 'abcdefgh'[idx % 8];
+    var rank = 8 - Math.floor(idx / 8);
+    return file + rank;
+  }
+
+  board() {
+    var result = [];
+    for (var r = 0; r < 8; r++) {
+      result[r] = [];
+      for (var c = 0; c < 8; c++) {
+        result[r][c] = this.board_array[r * 8 + c];
+      }
+    }
+    return result;
+  }
+
+  turn() { return this.turn_color; }
+
+  _generatePseudoLegalMoves(onlyCaptures) {
+    if (typeof onlyCaptures === 'undefined') onlyCaptures = false;
+    var moves = [];
+    var color = this.turn_color;
+    var enemy = color === this.WHITE ? this.BLACK : this.WHITE;
+
+    for (var idx = 0; idx < 64; idx++) {
+      var piece = this.board_array[idx];
+      if (!piece || piece.color !== color) continue;
+
+      var sq = this._idx2sq(idx);
+      var r = Math.floor(idx / 8);
+      var c = idx % 8;
+
+      if (piece.type === this.PAWN) {
+        var dir = color === this.WHITE ? -1 : 1;
+        var startRank = color === this.WHITE ? 6 : 1;
+        var promoRank = color === this.WHITE ? 0 : 7;
+
+        // Forward
+        if (!onlyCaptures) {
+          var fwdIdx = idx + dir * 8;
+          if (fwdIdx >= 0 && fwdIdx < 64 && !this.board_array[fwdIdx]) {
+            if (Math.floor(fwdIdx / 8) === promoRank) {
+              var promos = [this.QUEEN, this.ROOK, this.BISHOP, this.KNIGHT];
+              for (var pi = 0; pi < promos.length; pi++) {
+                moves.push({ from: sq, to: this._idx2sq(fwdIdx), promotion: promos[pi] });
+              }
+            } else {
+              moves.push({ from: sq, to: this._idx2sq(fwdIdx) });
+            }
+            // Double push
+            if (r === startRank) {
+              var dblIdx = idx + dir * 16;
+              if (!this.board_array[dblIdx]) {
+                moves.push({ from: sq, to: this._idx2sq(dblIdx) });
+              }
+            }
+          }
+        }
+
+        // Captures
+        var pawnDirs = [-1,1];
+        for (var pd = 0; pd < pawnDirs.length; pd++) {
+          var dc = pawnDirs[pd];
+          var nc = c + dc;
+          if (nc < 0 || nc > 7) continue;
+          var capIdx = idx + dir * 8 + dc;
+          if (capIdx < 0 || capIdx >= 64) continue;
+          var target = this.board_array[capIdx];
+          var epSq = this._idx2sq(capIdx);
+          if ((target && target.color === enemy) || epSq === this.ep_square) {
+            if (Math.floor(capIdx / 8) === promoRank) {
+              var promos2 = [this.QUEEN, this.ROOK, this.BISHOP, this.KNIGHT];
+              for (var pj = 0; pj < promos2.length; pj++) {
+                moves.push({
+                  from: sq, to: epSq,
+                  promotion: promos2[pj],
+                  captured: target ? target.type : this.PAWN
+                });
+              }
+            } else {
+              moves.push({
+                from: sq, to: epSq,
+                captured: target ? target.type : this.PAWN
+              });
+            }
+          }
+        }
+      }
+
+      if (piece.type === this.KNIGHT) {
+        var knightD = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+        for (var nd = 0; nd < knightD.length; nd++) {
+          var dr = knightD[nd][0], dc2 = knightD[nd][1];
+          var nr = r + dr, nc2 = c + dc2;
+          if (nr < 0 || nr > 7 || nc2 < 0 || nc2 > 7) continue;
+          var nidx = nr * 8 + nc2;
+          var target2 = this.board_array[nidx];
+          if (target2 && target2.color === color) continue;
+          if (onlyCaptures && !target2) continue;
+          moves.push({
+            from: sq,
+            to: this._idx2sq(nidx),
+            captured: target2 ? target2.type : undefined
+          });
+        }
+      }
+
+      if (piece.type === this.KING) {
+        var kingD = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        for (var kd = 0; kd < kingD.length; kd++) {
+          var kdr = kingD[kd][0], kdc = kingD[kd][1];
+          var knr = r + kdr, knc = c + kdc;
+          if (knr < 0 || knr > 7 || knc < 0 || knc > 7) continue;
+          var kidx = knr * 8 + knc;
+          var ktarget = this.board_array[kidx];
+          if (ktarget && ktarget.color === color) continue;
+          if (onlyCaptures && !ktarget) continue;
+          moves.push({
+            from: sq,
+            to: this._idx2sq(kidx),
+            captured: ktarget ? ktarget.type : undefined
+          });
+        }
+        // Castling
+        if (!onlyCaptures) {
+          if (color === this.WHITE && sq === 'e1') {
+            if (this.castling.K && !this.board_array[61] && !this.board_array[62]) {
+              if (!this._isAttacked('e1', enemy) && !this._isAttacked('f1', enemy) && !this._isAttacked('g1', enemy)) {
+                moves.push({ from: 'e1', to: 'g1', castling: 'K' });
+              }
+            }
+            if (this.castling.Q && !this.board_array[59] && !this.board_array[58] && !this.board_array[57]) {
+              if (!this._isAttacked('e1', enemy) && !this._isAttacked('d1', enemy) && !this._isAttacked('c1', enemy)) {
+                moves.push({ from: 'e1', to: 'c1', castling: 'Q' });
+              }
+            }
+          }
+          if (color === this.BLACK && sq === 'e8') {
+            if (this.castling.k && !this.board_array[5] && !this.board_array[6]) {
+              if (!this._isAttacked('e8', enemy) && !this._isAttacked('f8', enemy) && !this._isAttacked('g8', enemy)) {
+                moves.push({ from: 'e8', to: 'g8', castling: 'k' });
+              }
+            }
+            if (this.castling.q && !this.board_array[3] && !this.board_array[2] && !this.board_array[1]) {
+              if (!this._isAttacked('e8', enemy) && !this._isAttacked('d8', enemy) && !this._isAttacked('c8', enemy)) {
+                moves.push({ from: 'e8', to: 'c8', castling: 'q' });
+              }
+            }
+          }
+        }
+      }
+
+      // Bishop / Queen diagonals
+      if (piece.type === this.BISHOP || piece.type === this.QUEEN) {
+        var diagD = [[-1,-1],[-1,1],[1,-1],[1,1]];
+        for (var dd = 0; dd < diagD.length; dd++) {
+          var ddr = diagD[dd][0], ddc = diagD[dd][1];
+          for (var step = 1; step < 8; step++) {
+            var nr2 = r + ddr*step, nc3 = c + ddc*step;
+            if (nr2 < 0 || nr2 > 7 || nc3 < 0 || nc3 > 7) break;
+            var nidx2 = nr2*8 + nc3;
+            var target3 = this.board_array[nidx2];
+            if (target3) {
+              if (target3.color !== color) {
+                moves.push({ from: sq, to: this._idx2sq(nidx2), captured: target3.type });
+              }
+              break;
+            }
+            if (!onlyCaptures) moves.push({ from: sq, to: this._idx2sq(nidx2) });
+          }
+        }
+      }
+
+      // Rook / Queen straights
+      if (piece.type === this.ROOK || piece.type === this.QUEEN) {
+        var straightD = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (var sd = 0; sd < straightD.length; sd++) {
+          var sdr = straightD[sd][0], sdc = straightD[sd][1];
+          for (var step2 = 1; step2 < 8; step2++) {
+            var nr3 = r + sdr*step2, nc4 = c + sdc*step2;
+            if (nr3 < 0 || nr3 > 7 || nc4 < 0 || nc4 > 7) break;
+            var nidx3 = nr3*8 + nc4;
+            var target4 = this.board_array[nidx3];
+            if (target4) {
+              if (target4.color !== color) {
+                moves.push({ from: sq, to: this._idx2sq(nidx3), captured: target4.type });
+              }
+              break;
+            }
+            if (!onlyCaptures) moves.push({ from: sq, to: this._idx2sq(nidx3) });
+          }
+        }
+      }
+    }
+    return moves;
+  }
+
+  _isAttacked(sq, byColor) {
+    var idx = this._sq2idx(sq);
+    var r = Math.floor(idx / 8), c = idx % 8;
+
+    // Pawn attacks
+    var pawnDir = byColor === this.WHITE ? 1 : -1;
+    var pawnDC = [-1,1];
+    for (var pd = 0; pd < pawnDC.length; pd++) {
+      var dc = pawnDC[pd];
+      var pr = r + pawnDir, pc = c + dc;
+      if (pr >= 0 && pr < 8 && pc >= 0 && pc < 8) {
+        var p = this.board_array[pr * 8 + pc];
+        if (p && p.color === byColor && p.type === this.PAWN) return true;
+      }
+    }
+
+    // Knight attacks
+    var knightD = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+    for (var nd = 0; nd < knightD.length; nd++) {
+      var dr = knightD[nd][0], dc2 = knightD[nd][1];
+      var nr = r + dr, nc2 = c + dc2;
+      if (nr >= 0 && nr < 8 && nc2 >= 0 && nc2 < 8) {
+        var p2 = this.board_array[nr * 8 + nc2];
+        if (p2 && p2.color === byColor && p2.type === this.KNIGHT) return true;
+      }
+    }
+
+    // King attacks
+    var kingD = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+    for (var kd = 0; kd < kingD.length; kd++) {
+      var kdr = kingD[kd][0], kdc = kingD[kd][1];
+      var knr = r + kdr, knc = c + kdc;
+      if (knr >= 0 && knr < 8 && knc >= 0 && knc < 8) {
+        var p3 = this.board_array[knr * 8 + knc];
+        if (p3 && p3.color === byColor && p3.type === this.KING) return true;
+      }
+    }
+
+    // Diagonals
+    var diagD = [[-1,-1],[-1,1],[1,-1],[1,1]];
+    for (var dd = 0; dd < diagD.length; dd++) {
+      var ddr = diagD[dd][0], ddc = diagD[dd][1];
+      for (var step = 1; step < 8; step++) {
+        var nr2 = r + ddr*step, nc3 = c + ddc*step;
+        if (nr2 < 0 || nr2 > 7 || nc3 < 0 || nc3 > 7) break;
+        var p4 = this.board_array[nr2 * 8 + nc3];
+        if (p4) {
+          if (p4.color === byColor && (p4.type === this.BISHOP || p4.type === this.QUEEN)) return true;
+          break;
+        }
+      }
+    }
+
+    // Straights
+    var straightD = [[-1,0],[1,0],[0,-1],[0,1]];
+    for (var sd = 0; sd < straightD.length; sd++) {
+      var sdr = straightD[sd][0], sdc = straightD[sd][1];
+      for (var step2 = 1; step2 < 8; step2++) {
+        var nr3 = r + sdr*step2, nc4 = c + sdc*step2;
+        if (nr3 < 0 || nr3 > 7 || nc4 < 0 || nc4 > 7) break;
+        var p5 = this.board_array[nr3 * 8 + nc4];
+        if (p5) {
+          if (p5.color === byColor && (p5.type === this.ROOK || p5.type === this.QUEEN)) return true;
+          break;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  _findKing(color) {
+    for (var i = 0; i < 64; i++) {
+      var p = this.board_array[i];
+      if (p && p.color === color && p.type === this.KING) return this._idx2sq(i);
+    }
+    return null;
+  }
+
+  in_check() {
+    var kingSq = this._findKing(this.turn_color);
+    if (!kingSq) return false;
+    var enemy = this.turn_color === this.WHITE ? this.BLACK : this.WHITE;
+    return this._isAttacked(kingSq, enemy);
+  }
+
+  moves(options) {
+    options = options || {};
+    var pseudo = this._generatePseudoLegalMoves();
+    var legal = [];
+
+    for (var mi = 0; mi < pseudo.length; mi++) {
+      var m = pseudo[mi];
+
+      if (options.square && m.from !== options.square) continue;
+
+      var undo = this._makeMove(m);
+
+      var kingSq = this._findKing(this.turn_color === this.WHITE ? this.BLACK : this.WHITE);
+      if (kingSq && !this._isAttacked(kingSq, this.turn_color)) {
+        if (options.verbose) {
+          legal.push({
+            from: m.from,
+            to: m.to,
+            promotion: m.promotion,
+            castling: m.castling,
+            piece: undo.piece.type,
+            color: undo.piece.color
+          });
+        } else {
+          var san = m.from + m.to;
+          if (m.promotion) san += m.promotion;
+          legal.push(san);
+        }
+      }
+
+      this._undoMove(undo);
+    }
+
+    return legal;
+  }
+
+  _makeMove(m) {
+    var fromIdx = this._sq2idx(m.from);
+    var toIdx = this._sq2idx(m.to);
+    var piece = this.board_array[fromIdx];
+    var captured = this.board_array[toIdx];
+
+    var undo = {
+      from: m.from,
+      to: m.to,
+      piece: { type: piece.type, color: piece.color },
+      captured: captured ? { type: captured.type, color: captured.color } : null,
+      castling: {
+        K: this.castling.K,
+        Q: this.castling.Q,
+        k: this.castling.k,
+        q: this.castling.q
+      },
+      ep_square: this.ep_square,
+      half_moves: this.half_moves,
+      full_moves: this.full_moves,
+      promotion: m.promotion,
+      castlingMove: m.castling
+    };
+
+    // En passant capture
+    if (piece.type === this.PAWN && m.to === this.ep_square) {
+      var epCapIdx = this.turn_color === this.WHITE ? toIdx + 8 : toIdx - 8;
+      undo.epCaptured = this.board_array[epCapIdx] ? {
+        type: this.board_array[epCapIdx].type,
+        color: this.board_array[epCapIdx].color
+      } : null;
+      undo.epCapIdx = epCapIdx;
+      this.board_array[epCapIdx] = null;
+    }
+
+    this.board_array[fromIdx] = null;
+    this.board_array[toIdx] = piece;
+
+    if (m.promotion) {
+      this.board_array[toIdx] = { type: m.promotion, color: piece.color };
+    }
+
+    // Castling rook moves
+    if (m.castling) {
+      if (m.castling === 'K') {
+        this.board_array[61] = this.board_array[63];
+        this.board_array[63] = null;
+      } else if (m.castling === 'Q') {
+        this.board_array[59] = this.board_array[56];
+        this.board_array[56] = null;
+      } else if (m.castling === 'k') {
+        this.board_array[5] = this.board_array[7];
+        this.board_array[7] = null;
+      } else if (m.castling === 'q') {
+        this.board_array[3] = this.board_array[0];
+        this.board_array[0] = null;
+      }
+    }
+
+    // Update castling rights
+    if (piece.type === this.KING) {
+      if (piece.color === this.WHITE) {
+        this.castling.K = false;
+        this.castling.Q = false;
+      } else {
+        this.castling.k = false;
+        this.castling.q = false;
+      }
+    }
+    if (m.from === 'a1' || m.to === 'a1') this.castling.Q = false;
+    if (m.from === 'h1' || m.to === 'h1') this.castling.K = false;
+    if (m.from === 'a8' || m.to === 'a8') this.castling.q = false;
+    if (m.from === 'h8' || m.to === 'h8') this.castling.k = false;
+
+    // En passant square
+    if (piece.type === this.PAWN && Math.abs(fromIdx - toIdx) === 16) {
+      this.ep_square = this._idx2sq((fromIdx + toIdx) / 2);
+    } else {
+      this.ep_square = null;
+    }
+
+    // Move counters
+    if (piece.type === this.PAWN || captured) {
+      this.half_moves = 0;
+    } else {
+      this.half_moves++;
+    }
+    if (this.turn_color === this.BLACK) {
+      this.full_moves++;
+    }
+
+    this.turn_color = this.turn_color === this.WHITE ? this.BLACK : this.WHITE;
+
+    return undo;
+  }
+
+  _undoMove(undo) {
+    this.turn_color = this.turn_color === this.WHITE ? this.BLACK : this.WHITE;
+
+    var fromIdx = this._sq2idx(undo.from);
+    var toIdx = this._sq2idx(undo.to);
+
+    this.board_array[fromIdx] = { type: undo.piece.type, color: undo.piece.color };
+    this.board_array[toIdx] = undo.captured ? { type: undo.captured.type, color: undo.captured.color } : null;
+
+    if (undo.epCaptured && typeof undo.epCapIdx === 'number') {
+      this.board_array[undo.epCapIdx] = {
+        type: undo.epCaptured.type,
+        color: undo.epCaptured.color
+      };
+    }
+
+    if (undo.castlingMove) {
+      if (undo.castlingMove === 'K') {
+        this.board_array[63] = this.board_array[61];
+        this.board_array[61] = null;
+      } else if (undo.castlingMove === 'Q') {
+        this.board_array[56] = this.board_array[59];
+        this.board_array[59] = null;
+      } else if (undo.castlingMove === 'k') {
+        this.board_array[7] = this.board_array[5];
+        this.board_array[5] = null;
+      } else if (undo.castlingMove === 'q') {
+        this.board_array[0] = this.board_array[3];
+        this.board_array[3] = null;
+      }
+    }
+
+    this.castling = {
+      K: undo.castling.K,
+      Q: undo.castling.Q,
+      k: undo.castling.k,
+      q: undo.castling.q
+    };
+    this.ep_square = undo.ep_square;
+    this.half_moves = undo.half_moves;
+    this.full_moves = undo.full_moves;
+  }
+
+  move(moveInput) {
+    var m;
+    if (typeof moveInput === 'string') {
+      var from = moveInput.slice(0, 2);
+      var to = moveInput.slice(2, 4);
+      var promo = moveInput[4];
+      m = { from: from, to: to, promotion: promo };
+    } else {
+      m = moveInput;
+    }
+
+    var legalMoves = this._generatePseudoLegalMoves();
+    var found = null;
+
+    for (var i = 0; i < legalMoves.length; i++) {
+      var lm = legalMoves[i];
+      if (lm.from === m.from && lm.to === m.to) {
+        if (m.promotion) {
+          if (lm.promotion === m.promotion) { found = lm; break; }
+        } else if (!lm.promotion) {
+          found = lm; break;
+        } else if (lm.promotion === this.QUEEN) {
+          found = lm; break;
+        }
+      }
+    }
+
+    if (!found) return null;
+
+    var undo = this._makeMove(found);
+
+    var prevTurn = this.turn_color === this.WHITE ? this.BLACK : this.WHITE;
+    var kingSq = this._findKing(prevTurn);
+    if (kingSq && this._isAttacked(kingSq, this.turn_color)) {
+      this._undoMove(undo);
+      return null;
+    }
+
+    this.history_stack.push(undo);
+
+    return {
+      from: found.from,
+      to: found.to,
+      piece: undo.piece.type,
+      color: undo.piece.color,
+      captured: undo.captured ? undo.captured.type : undefined,
+      promotion: found.promotion
+    };
+  }
+
+  undo() {
+    if (!this.history_stack.length) return null;
+    var undo = this.history_stack.pop();
+    this._undoMove(undo);
+    return undo;
+  }
+
+  game_over() {
+    if (this.moves().length === 0) return true;
+    if (this.half_moves >= 100) return true;
+    return false;
+  }
+
+  in_checkmate() {
+    return this.in_check() && this.moves().length === 0;
+  }
+
+  in_stalemate() {
+    return !this.in_check() && this.moves().length === 0;
+  }
+
+  in_draw() {
+    if (this.in_stalemate()) return true;
+    if (this.half_moves >= 100) return true;
+    var pieces = [];
+    for (var i = 0; i < this.board_array.length; i++) {
+      if (this.board_array[i] !== null) pieces.push(this.board_array[i]);
+    }
+    if (pieces.length === 2) return true;
+    if (pieces.length === 3) {
+      var nonKing = null;
+      for (var j = 0; j < pieces.length; j++) {
+        if (pieces[j].type !== this.KING) { nonKing = pieces[j]; break; }
+      }
+      if (nonKing && (nonKing.type === this.BISHOP || nonKing.type === this.KNIGHT)) return true;
+    }
+    return false;
+  }
+}
+
+/* ==========================================================
+   GLOBAL UI STATE
+   ========================================================== */
+var modeSelect   = document.getElementById('mode');
+var opponentSelect = document.getElementById('opponent');
+var skillSlider  = document.getElementById('skill');
+var skillLabel   = document.getElementById('skillLabel');
+var newGameBtn   = document.getElementById('newGame');
+
+var opponentMode = opponentSelect.value; // "computer" or "human"
+
+function setSkillLabel(v){
+  var names = ['Very Easy','Easy','Medium','Hard','Very Hard'];
+  skillLabel.textContent = names[v-1];
+}
+setSkillLabel(skillSlider.value);
+skillSlider.addEventListener('input',function(){setSkillLabel(skillSlider.value);});
+
+function showTab(mode){
+  var tabs = document.querySelectorAll('.tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  document.getElementById(mode+'Tab').classList.add('active');
+  initGame();
+}
+modeSelect.addEventListener('change',function(){showTab(modeSelect.value);});
+
+opponentSelect.addEventListener('change', function(){
+  opponentMode = opponentSelect.value;
+  initGame();
+});
+
+/* ==========================================================
+   CHESS SECTION – click-to-move UI
+   ========================================================== */
+var chess;
+var selectedSquare = null;
+var legalMovesFromSelected = [];
+var lastMove = null;
+var chessStatus = document.getElementById('chessStatus');
+
+function pieceUnicode(piece){
+  var key = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
+  var map = {
+    'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙',
+    'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'
+  };
+  return map[key] || '';
+}
+
+function renderChessBoard(){
+  var boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  var board = chess.board();
+  var files = 'abcdefgh';
+
+  for (var r = 0; r < 8; r++) {
+    for (var c = 0; c < 8; c++) {
+      var sqDiv = document.createElement('div');
+      var isLight = (r + c) % 2 === 0;
+      sqDiv.className = 'square ' + (isLight ? 'white-sq' : 'black-sq');
+      var sq = files[c] + (8 - r);
+      sqDiv.dataset.square = sq;
+
+      if (lastMove && (sq === lastMove.from || sq === lastMove.to)) {
+        sqDiv.classList.add('last-move');
+      }
+
+      if (sq === selectedSquare) {
+        sqDiv.classList.add('selected');
+      }
+
+      for (var i = 0; i < legalMovesFromSelected.length; i++) {
+        if (legalMovesFromSelected[i].to === sq) {
+          sqDiv.classList.add('legal-move');
+          break;
+        }
+      }
+
+      var piece = board[r][c];
+      if (piece) {
+        var span = document.createElement('span');
+        span.className = 'piece';
+        span.textContent = pieceUnicode(piece);
+        sqDiv.appendChild(span);
+      }
+
+      (function(squareName){
+        sqDiv.addEventListener('click', function(){
+          handleChessSquareClick(squareName);
+        });
+      })(sq);
+
+      boardEl.appendChild(sqDiv);
+    }
+  }
+}
+
+function handleChessSquareClick(sq){
+  if (chess.game_over()) return;
+
+  // In computer mode, ignore input while it's black's (AI) turn
+  if (opponentMode === 'computer' && chess.turn() === 'b') {
+    return;
+  }
+
+  if (!selectedSquare) {
+    // Start selection if this square has any legal moves
+    var movesFromSq = chess.moves({square: sq, verbose: true});
+    if (!movesFromSq.length) return;
+    selectedSquare = sq;
+    legalMovesFromSelected = movesFromSq;
+    renderChessBoard();
+  } else {
+    if (sq === selectedSquare) {
+      // Deselect
+      selectedSquare = null;
+      legalMovesFromSelected = [];
+      renderChessBoard();
+      return;
+    }
+
+    // Try to move to clicked square
+    var targetMove = null;
+    for (var i = 0; i < legalMovesFromSelected.length; i++) {
+      if (legalMovesFromSelected[i].to === sq) {
+        targetMove = legalMovesFromSelected[i];
+        break;
+      }
+    }
+
+    if (!targetMove) {
+      // Invalid destination: clear selection
+      selectedSquare = null;
+      legalMovesFromSelected = [];
+      renderChessBoard();
+      return;
+    }
+
+    var moveObj = { from: targetMove.from, to: targetMove.to };
+    if (targetMove.promotion) moveObj.promotion = targetMove.promotion;
+    var move = chess.move(moveObj);
+    selectedSquare = null;
+    legalMovesFromSelected = [];
+
+    if (!move) {
+      renderChessBoard();
+      return;
+    }
+
+    lastMove = { from: move.from, to: move.to };
+    renderChessBoard();
+    updateChessStatus();
+
+    if (!chess.game_over() && opponentMode === 'computer') {
+      setTimeout(computeChessAI, 200);
+    }
+  }
+}
+
+function initChess(){
+  chess = new Chess();
+  selectedSquare = null;
+  legalMovesFromSelected = [];
+  lastMove = null;
+  renderChessBoard();
+  updateChessStatus();
+}
+
+function computeChessAI(){
+  if (opponentMode !== 'computer') return;
+  if (chess.game_over()) return;
+  if (chess.turn() !== 'b') return; // AI is black
+
+  var depth = Number(skillSlider.value);
+  var best = minimaxRoot(depth, chess, false);
+  if (!best) {
+    updateChessStatus();
+    return;
+  }
+  var move = chess.move(best);
+  if (move) {
+    lastMove = { from: move.from, to: move.to };
+  }
+  renderChessBoard();
+  updateChessStatus();
+}
+
+function updateChessStatus() {
+  if (chess.in_checkmate()) {
+    var winner = chess.turn() === 'w' ? 'Black' : 'White';
+    chessStatus.textContent = 'Checkmate! ' + winner + ' wins!';
+    chessStatus.classList.add('gameover');
+  } else if (chess.in_stalemate()) {
+    chessStatus.textContent = 'Stalemate! Draw.';
+    chessStatus.classList.add('gameover');
+  } else if (chess.in_draw()) {
+    chessStatus.textContent = 'Draw!';
+    chessStatus.classList.add('gameover');
+  } else if (chess.in_check()) {
+    if (opponentMode === 'computer') {
+      chessStatus.textContent = chess.turn() === 'w' ? 'White is in check!' : 'Black (AI) is in check!';
+    } else {
+      chessStatus.textContent = chess.turn() === 'w' ? 'White is in check!' : 'Black is in check!';
+    }
+    chessStatus.classList.remove('gameover');
+  } else {
+    if (opponentMode === 'computer') {
+      chessStatus.textContent = chess.turn() === 'w' ? 'Your turn (White)' : 'AI thinking...';
+    } else {
+      chessStatus.textContent = chess.turn() === 'w' ? 'White to move' : 'Black to move';
+    }
+    chessStatus.classList.remove('gameover');
+  }
+}
+
+/* ---- minimax (alpha-beta) for Chess ---- */
+function minimaxRoot(depth, game, isMax){
+  var moves = game.moves();
+  if (!moves.length) return null;
+  var bestMove = null;
+  var bestVal = isMax ? -Infinity : Infinity;
+  
+  // Shuffle moves for variety
+  for (var i = moves.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = moves[i]; moves[i] = moves[j]; moves[j] = tmp;
+  }
+  
+  for (var k = 0; k < moves.length; k++){
+    var m = moves[k];
+    game.move(m);
+    var val = minimax(depth - 1, game, -Infinity, Infinity, !isMax);
+    game.undo();
+    if (isMax){
+      if (val > bestVal){ bestVal = val; bestMove = m; }
+    } else {
+      if (val < bestVal){ bestVal = val; bestMove = m; }
+    }
+  }
+  return bestMove;
+}
+
+function minimax(depth, game, alpha, beta, isMax){
+  if (depth === 0 || game.game_over()){
+    return evaluateBoard(game);
+  }
+  var moves = game.moves();
+  if (isMax){
+    var max = -Infinity;
+    for (var i = 0; i < moves.length; i++){
+      var m = moves[i];
+      game.move(m);
+      var val = minimax(depth - 1, game, alpha, beta, false);
+      game.undo();
+      if (val > max) max = val;
+      if (val > alpha) alpha = val;
+      if (beta <= alpha) break;
+    }
+    return max;
+  } else {
+    var min = Infinity;
+    for (var j = 0; j < moves.length; j++){
+      var m2 = moves[j];
+      game.move(m2);
+      var val2 = minimax(depth - 1, game, alpha, beta, true);
+      game.undo();
+      if (val2 < min) min = val2;
+      if (val2 < beta) beta = val2;
+      if (beta <= alpha) break;
+    }
+    return min;
+  }
+}
+
+function evaluateBoard(game){
+  var pieceVals = {p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000};
+  var board = game.board();
+  var total = 0;
+  
+  for (var r = 0; r < 8; r++) {
+    for (var c = 0; c < 8; c++) {
+      var p = board[r][c];
+      if (!p) continue;
+      var val = pieceVals[p.type];
+      if (p.type === 'p') {
+        val += (p.color === 'w' ? (6 - r) : (r - 1)) * 10;
+      }
+      if (p.type === 'n' || p.type === 'b') {
+        var centerDist = Math.abs(3.5 - r) + Math.abs(3.5 - c);
+        val += (7 - centerDist) * 5;
+      }
+      total += (p.color === 'w' ? 1 : -1) * val;
+    }
+  }
+  
+  if (game.in_checkmate()) {
+    total += game.turn() === 'w' ? -100000 : 100000;
+  }
+  
+  return total;
+}
+
+/* ==========================================================
+   CHECKERS SECTION
+   ========================================================== */
+var CHECKERS = {
+  size: 8,
+  board: [],
+  turn: 1,
+  selected: null
+};
+var checkersStatus = document.getElementById('checkersStatus');
+
+function initCheckers(){
+  var container = document.getElementById('checkersBoard');
+  container.innerHTML = '';
+  var tbl = document.createElement('table');
+  tbl.className = 'checkers';
+  for (var r = 0; r < 8; r++){
+    var tr = document.createElement('tr');
+    for (var c = 0; c < 8; c++){
+      var td = document.createElement('td');
+      td.className = (r + c) % 2 === 1 ? 'dark' : 'light';
+      if ((r + c) % 2 === 1){
+        td.dataset.r = r;
+        td.dataset.c = c;
+        td.addEventListener('click', onCheckersClick);
+      }
+      tr.appendChild(td);
+    }
+    tbl.appendChild(tr);
+  }
+  container.appendChild(tbl);
+  resetCheckersState();
+  renderCheckers();
+  updateCheckersStatus();
+}
+
+function resetCheckersState(){
+  var s = [];
+  for (var r = 0; r < 8; r++){
+    s[r] = [];
+    for (var c = 0; c < 8; c++) s[r][c] = 0;
+  }
+  for (var rr = 0; rr < 3; rr++) for (var cc = 0; cc < 8; cc++) if ((rr + cc) % 2 === 1) s[rr][cc] = -1;
+  for (var rr2 = 5; rr2 < 8; rr2++) for (var cc2 = 0; cc2 < 8; cc2++) if ((rr2 + cc2) % 2 === 1) s[rr2][cc2] = 1;
+  CHECKERS.board = s;
+  CHECKERS.turn = 1;
+  CHECKERS.selected = null;
+}
+
+function renderCheckers(){
+  var tbl = document.querySelector('table.checkers');
+  if (!tbl) return;
+  for (var r = 0; r < 8; r++) {
+    for (var c = 0; c < 8; c++){
+      var td = tbl.rows[r].cells[c];
+      td.innerHTML = '';
+      var p = CHECKERS.board[r][c];
+      if (p !== 0){
+        var span = document.createElement('span');
+        span.className = 'piece';
+        span.textContent = p > 0 ? '⚪' : '⚫';
+        if (Math.abs(p) === 2) {
+          var crown = document.createElement('span');
+          crown.className = 'crown';
+          crown.textContent = '👑';
+          span.appendChild(crown);
+        }
+        td.appendChild(span);
+      }
+    }
+  }
+}
+
+function updateCheckersStatus() {
+  var flat = [];
+  for (var r = 0; r < 8; r++) {
+    for (var c = 0; c < 8; c++) flat.push(CHECKERS.board[r][c]);
+  }
+  var whiteCount = flat.filter(function(p){return p > 0;}).length;
+  var blackCount = flat.filter(function(p){return p < 0;}).length;
+  
+  if (whiteCount === 0) {
+    checkersStatus.textContent = 'Black wins!';
+    checkersStatus.classList.add('gameover');
+  } else if (blackCount === 0) {
+    checkersStatus.textContent = 'White wins!';
+    checkersStatus.classList.add('gameover');
+  } else {
+    if (opponentMode === 'computer') {
+      checkersStatus.textContent = CHECKERS.turn === 1 ? 'Your turn (White)' : 'AI thinking...';
+    } else {
+      checkersStatus.textContent = CHECKERS.turn === 1 ? 'White to move' : 'Black to move';
+    }
+    checkersStatus.classList.remove('gameover');
+  }
+}
+
+function onCheckersClick(e){
+  // In computer mode, ignore clicks when it's AI's turn
+  if (opponentMode === 'computer' && CHECKERS.turn !== 1) return;
+  
+  var td = e.currentTarget;
+  var r = Number(td.dataset.r), c = Number(td.dataset.c);
+  var piece = CHECKERS.board[r][c];
+
+  if (CHECKERS.selected){
+    var sr = CHECKERS.selected.r, sc = CHECKERS.selected.c;
+    var legal = getLegalMoves(sr, sc);
+    var target = null;
+    for (var i = 0; i < legal.length; i++){
+      if (legal[i].toR === r && legal[i].toC === c) { target = legal[i]; break; }
+    }
+    if (target){
+      makeCheckersMove(sr, sc, r, c, target.captures);
+      CHECKERS.selected = null;
+      clearCheckersHighlights();
+      renderCheckers();
+      updateCheckersStatus();
+      
+      if (opponentMode === 'computer' && CHECKERS.turn === -1){
+        setTimeout(computeCheckersAI, 300);
+      }
+    } else {
+      CHECKERS.selected = null;
+      clearCheckersHighlights();
+    }
+    return;
+  }
+
+  if (piece !== 0 && (opponentMode === 'human' || Math.sign(piece) === CHECKERS.turn)){
+    CHECKERS.selected = {r: r, c: c};
+    clearCheckersHighlights();
+    highlightMoves(r, c);
+  }
+}
+
+function highlightMoves(r, c){
+  var moves = getLegalMoves(r, c);
+  var tbl = document.querySelector('table.checkers');
+  for (var i = 0; i < moves.length; i++){
+    var m = moves[i];
+    tbl.rows[m.toR].cells[m.toC].classList.add('highlight');
+  }
+}
+
+function clearCheckersHighlights(){
+  var tds = document.querySelectorAll('td.highlight');
+  for (var i = 0; i < tds.length; i++) tds[i].classList.remove('highlight');
+}
+
+function getLegalMoves(r, c){
+  var piece = CHECKERS.board[r][c];
+  if (piece === 0) return [];
+
+  var dirs;
+  if (Math.abs(piece) === 2) {
+    dirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
+  } else {
+    dirs = piece > 0 ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]];
+  }
+
+  var moves = [];
+  
+  // Captures first
+  for (var d = 0; d < dirs.length; d++){
+    var dr = dirs[d][0], dc = dirs[d][1];
+    var r1 = r + dr, c1 = c + dc;
+    var r2 = r + 2*dr, c2 = c + 2*dc;
+    if (r2 < 0 || r2 > 7 || c2 < 0 || c2 > 7) continue;
+    if (CHECKERS.board[r2][c2] === 0 &&
+        CHECKERS.board[r1][c1] !== 0 &&
+        Math.sign(CHECKERS.board[r1][c1]) === -Math.sign(piece)){
+      var copy = CHECKERS.board.map(function(row){return row.slice();});
+      copy[r][c] = 0; copy[r1][c1] = 0; copy[r2][c2] = piece;
+      var further = getLegalMovesRecursive(r2, c2, copy, piece);
+      if (further.length){
+        for (var f = 0; f < further.length; f++){
+          moves.push({
+            toR: further[f].toR,
+            toC: further[f].toC,
+            captures: [{r:r1,c:c1}].concat(further[f].captures)
+          });
+        }
+      } else {
+        moves.push({toR: r2, toC: c2, captures: [{r:r1,c:c1}]});
+      }
+    }
+  }
+  if (moves.length) return moves;
+
+  // Normal moves
+  for (var d2 = 0; d2 < dirs.length; d2++){
+    var dr2 = dirs[d2][0], dc2 = dirs[d2][1];
+    var nr = r + dr2, nc = c + dc2;
+    if (nr < 0 || nr > 7 || nc < 0 || nc > 7) continue;
+    if (CHECKERS.board[nr][nc] === 0) moves.push({toR: nr, toC: nc, captures: []});
+  }
+  return moves;
+}
+
+function getLegalMovesRecursive(r, c, boardCopy, piece){
+  var dirs;
+  if (Math.abs(piece) === 2) {
+    dirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
+  } else {
+    dirs = piece > 0 ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]];
+  }
+  var jumps = [];
+  for (var d = 0; d < dirs.length; d++){
+    var dr = dirs[d][0], dc = dirs[d][1];
+    var r1 = r + dr, c1 = c + dc;
+    var r2 = r + 2*dr, c2 = c + 2*dc;
+    if (r2 < 0 || r2 > 7 || c2 < 0 || c2 > 7) continue;
+    if (boardCopy[r2][c2] === 0 &&
+        boardCopy[r1][c1] !== 0 &&
+        Math.sign(boardCopy[r1][c1]) === -Math.sign(piece)){
+      var copy = boardCopy.map(function(row){return row.slice();});
+      copy[r][c] = 0; copy[r1][c1] = 0; copy[r2][c2] = piece;
+      var further = getLegalMovesRecursive(r2, c2, copy, piece);
+      if (further.length){
+        for (var f = 0; f < further.length; f++){
+          jumps.push({
+            toR: further[f].toR,
+            toC: further[f].toC,
+            captures: [{r:r1,c:c1}].concat(further[f].captures)
+          });
+        }
+      } else {
+        jumps.push({toR: r2, toC: c2, captures: [{r:r1,c:c1}]});
+      }
+    }
+  }
+  return jumps;
+}
+
+function makeCheckersMove(fr, fc, tr, tc, captures){
+  var piece = CHECKERS.board[fr][fc];
+  CHECKERS.board[fr][fc] = 0;
+  CHECKERS.board[tr][tc] = piece;
+  for (var i = 0; i < captures.length; i++){
+    var cap = captures[i];
+    CHECKERS.board[cap.r][cap.c] = 0;
+  }
+  if (piece === 1 && tr === 0) CHECKERS.board[tr][tc] = 2;
+  if (piece === -1 && tr === 7) CHECKERS.board[tr][tc] = -2;
+  CHECKERS.turn *= -1;
+}
+
+/* ---- Checkers AI ---- */
+function computeCheckersAI(){
+  if (opponentMode !== 'computer') return;
+  var depth = Number(skillSlider.value);
+  var best = checkersMinimaxRoot(depth, CHECKERS.board, CHECKERS.turn);
+  if (!best){
+    updateCheckersStatus();
+    return;
+  }
+  makeCheckersMove(best.from.r, best.from.c, best.to.r, best.to.c, best.captures);
+  renderCheckers();
+  updateCheckersStatus();
+}
+
+function checkersMinimaxRoot(depth, boardState, turn){
+  var moves = generateAllMoves(boardState, turn);
+  if (!moves.length) return null;
+  
+  for (var i = moves.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = moves[i]; moves[i] = moves[j]; moves[j] = tmp;
+  }
+  
+  var bestScore = turn === 1 ? -Infinity : Infinity;
+  var bestMove = null;
+  for (var k = 0; k < moves.length; k++){
+    var m = moves[k];
+    var nb = applyCheckersMove(boardState, m);
+    var score = checkersMinimax(depth - 1, nb, -turn, -Infinity, Infinity);
+    if (turn === 1){
+      if (score > bestScore){ bestScore = score; bestMove = m; }
+    } else {
+      if (score < bestScore){ bestScore = score; bestMove = m; }
+    }
+  }
+  return bestMove;
+}
+
+function checkersMinimax(depth, boardState, turn, alpha, beta){
+  if (depth === 0) return evaluateCheckers(boardState);
+  var moves = generateAllMoves(boardState, turn);
+  if (!moves.length) return evaluateCheckers(boardState);
+  if (turn === 1){
+    var max = -Infinity;
+    for (var i = 0; i < moves.length; i++){
+      var m = moves[i];
+      var nb = applyCheckersMove(boardState, m);
+      var val = checkersMinimax(depth - 1, nb, -turn, alpha, beta);
+      if (val > max) max = val;
+      if (val > alpha) alpha = val;
+      if (beta <= alpha) break;
+    }
+    return max;
+  } else {
+    var min = Infinity;
+    for (var j = 0; j < moves.length; j++){
+      var m2 = moves[j];
+      var nb2 = applyCheckersMove(boardState, m2);
+      var val2 = checkersMinimax(depth - 1, nb2, -turn, alpha, beta);
+      if (val2 < min) min = val2;
+      if (val2 < beta) beta = val2;
+      if (beta <= alpha) break;
+    }
+    return min;
+  }
+}
+
+function generateAllMoves(boardState, turn){
+  var all = [];
+  for (var r = 0; r < 8; r++) {
+    for (var c = 0; c < 8; c++){
+      var p = boardState[r][c];
+      if (p !== 0 && Math.sign(p) === turn){
+        var tempBoard = CHECKERS.board;
+        CHECKERS.board = boardState;
+        var moves = getLegalMoves(r, c);
+        CHECKERS.board = tempBoard;
+        for (var i = 0; i < moves.length; i++){
+          var m = moves[i];
+          all.push({
+            from: {r:r, c:c},
+            to: {r:m.toR, c:m.toC},
+            captures: m.captures
+          });
+        }
+      }
+    }
+  }
+  return all;
+}
+
+function applyCheckersMove(boardState, move){
+  var copy = boardState.map(function(row){return row.slice();});
+  var piece = copy[move.from.r][move.from.c];
+  copy[move.from.r][move.from.c] = 0;
+  copy[move.to.r][move.to.c] = piece;
+  for (var i = 0; i < move.captures.length; i++){
+    var cap = move.captures[i];
+    copy[cap.r][cap.c] = 0;
+  }
+  if (piece === 1 && move.to.r === 0) copy[move.to.r][move.to.c] = 2;
+  if (piece === -1 && move.to.r === 7) copy[move.to.r][move.to.c] = -2;
+  return copy;
+}
+
+function evaluateCheckers(boardState){
+  var score = 0;
+  for (var r = 0; r < 8; r++) {
+    for (var c = 0; c < 8; c++){
+      var p = boardState[r][c];
+      if (p === 0) continue;
+      var val = Math.abs(p) === 2 ? 3 : 1;
+      if (p > 0) val += (7 - r) * 0.1;
+      else val += r * 0.1;
+      if (c >= 2 && c <= 5) val += 0.1;
+      score += Math.sign(p) * val;
+    }
+  }
+  return score;
+}
+
+/* ==========================================================
+   GLOBAL INITIALIZATION
+   ========================================================== */
+function initGame(){
+  if (modeSelect.value === 'chess'){
+    initChess();
+  } else {
+    initCheckers();
+  }
+}
+initGame();
+newGameBtn.addEventListener('click', initGame);
+</script>
+</body>
+</html>
+
