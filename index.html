@@ -355,6 +355,11 @@ class Chess {
     return result;
   }
 
+  get(square) {
+    var idx = this._sq2idx(square);
+    return this.board_array[idx] || null;
+  }
+
   turn() { return this.turn_color; }
 
   _generatePseudoLegalMoves(onlyCaptures) {
