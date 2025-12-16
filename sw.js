@@ -1,8 +1,8 @@
 // sw.js
-const CACHE_NAME = 'chesshire-cat-v2';
+const CACHE_NAME = 'chesshire-cat-v3';
 const ASSETS = [
   './',
-  './ChesshireCat.html',
+  './index.html',
   './ChesshireCat.png',
   './manifest.webmanifest'
 ];
