@@ -130,23 +130,10 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
 .chessboard .square.legal-move{background:rgba(100,200,100,0.5)!important;}
 .chessboard .square.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 .chessboard .piece{
-  cursor:grab;
-  transition:transform 0.1s;
-  font-size:28px!important;
-  width:28px;
-  height:28px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  font-size:32px;
   line-height:1;
-  pointer-events:none;
-  color:#fff;
-  text-shadow: 0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.5);
 }
-.chessboard .piece.black-piece{
-  color:#2c2c2c;
-  text-shadow: 0 0 2px rgba(255,255,255,0.6), 0 0 4px rgba(255,255,255,0.3);
-}
+.chessboard .piece:active{transform:scale(1.1);}
 .chessboard .piece.dragging{opacity:0.5;}
 
 /* Move notation display */
@@ -991,11 +978,12 @@ var chessStatus = document.getElementById('chessStatus');
 var moveNotation = document.getElementById('moveNotation');
 
 function pieceUnicode(piece){
-  // Use white pieces for both colors, differentiate by CSS color
+  var key = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
   var map = {
-    'k':'♔','q':'♕','r':'♖','b':'♗','n':'♘','p':'♙'
+    'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙',
+    'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'
   };
-  return map[piece.type] || '';
+  return map[key] || '';
 }
 
 function getPieceName(piece) {
@@ -1080,10 +1068,6 @@ function renderChessBoard(){
       if (piece) {
         var span = document.createElement('span');
         span.className = 'piece';
-        // Add color class for black pieces
-        if (piece.color === 'b') {
-          span.className += ' black-piece';
-        }
         span.textContent = pieceUnicode(piece);
         sqDiv.appendChild(span);
       }
