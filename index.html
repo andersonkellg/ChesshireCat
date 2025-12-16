@@ -140,8 +140,25 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
   justify-content:center;
   line-height:1;
 }
+.chessboard .piece.black-pawn{
+  transform:scale(0.75)!important;
+}
 .chessboard .piece:active{cursor:grabbing;transform:scale(1.15);}
+.chessboard .piece.black-pawn:active{cursor:grabbing;transform:scale(0.85)!important;}
 .chessboard .piece.dragging{opacity:0.5;}
+
+/* Move notation display */
+.move-notation{
+  margin-top:0.5rem;
+  padding:0.4rem 0.8rem;
+  background:rgba(15,52,96,0.6);
+  border-radius:12px;
+  color:#e94560;
+  font-size:0.85rem;
+  font-weight:bold;
+  min-height:24px;
+  text-align:center;
+}
 
 /* ---------- Checkers ---------- */
 table.checkers{border-collapse:collapse;border-radius:4px;overflow:hidden;}
@@ -223,6 +240,7 @@ table.checkers td{width:45px;height:45px;text-align:center;vertical-align:middle
         </div>
       </div>
       <div id="chessStatus" class="status">Your turn (White)</div>
+      <div id="moveNotation" class="move-notation">Select a piece to move</div>
     </section>
 
     <!-- ---------- Checkers tab ---------- -->
@@ -968,6 +986,7 @@ var selectedSquare = null;
 var legalMovesFromSelected = [];
 var lastMove = null;
 var chessStatus = document.getElementById('chessStatus');
+var moveNotation = document.getElementById('moveNotation');
 
 function pieceUnicode(piece){
   var key = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
@@ -976,6 +995,55 @@ function pieceUnicode(piece){
     'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'
   };
   return map[key] || '';
+}
+
+function getPieceName(piece) {
+  var names = {
+    'p': 'Pawn',
+    'n': 'Knight',
+    'b': 'Bishop',
+    'r': 'Rook',
+    'q': 'Queen',
+    'k': 'King'
+  };
+  return names[piece.type] || 'Piece';
+}
+
+function updateMoveNotation(text) {
+  if (moveNotation) {
+    moveNotation.textContent = text;
+  }
+}
+
+function describePieceAtSquare(square) {
+  var piece = chess.get(square);
+  if (!piece) return null;
+  var pieceName = getPieceName(piece);
+  var color = piece.color === 'w' ? 'White' : 'Black';
+  return color + ' ' + pieceName + ' ' + square.toUpperCase();
+}
+
+function describeMove(move) {
+  var piece = chess.get(move.to);
+  if (!piece) return '';
+
+  var pieceName = getPieceName(piece);
+  var fromSquare = move.from.toUpperCase();
+  var toSquare = move.to.toUpperCase();
+
+  if (move.captured) {
+    var capturedName = getPieceName({type: move.captured});
+    return pieceName + ' ' + fromSquare + ' takes ' + capturedName + ' at ' + toSquare;
+  } else if (move.flags && move.flags.indexOf('k') !== -1) {
+    return 'Kingside Castle';
+  } else if (move.flags && move.flags.indexOf('q') !== -1) {
+    return 'Queenside Castle';
+  } else if (move.promotion) {
+    var promotedName = getPieceName({type: move.promotion});
+    return pieceName + ' ' + fromSquare + ' to ' + toSquare + ', promotes to ' + promotedName;
+  } else {
+    return pieceName + ' ' + fromSquare + ' to ' + toSquare;
+  }
 }
 
 function renderChessBoard(){
@@ -1011,6 +1079,10 @@ function renderChessBoard(){
       if (piece) {
         var span = document.createElement('span');
         span.className = 'piece';
+        // Add special class for black pawns to scale them down
+        if (piece.type === 'p' && piece.color === 'b') {
+          span.className += ' black-pawn';
+        }
         span.textContent = pieceUnicode(piece);
         sqDiv.appendChild(span);
       }
@@ -1043,12 +1115,18 @@ function handleChessSquareClick(sq){
     if (!movesFromSq.length) return;
     selectedSquare = sq;
     legalMovesFromSelected = movesFromSq;
+
+    // Show selected piece
+    var description = describePieceAtSquare(sq);
+    updateMoveNotation(description ? description + ' selected' : 'Piece selected');
+
     renderChessBoard();
   } else {
     if (sq === selectedSquare) {
       // Deselect
       selectedSquare = null;
       legalMovesFromSelected = [];
+      updateMoveNotation('Select a piece to move');
       renderChessBoard();
       return;
     }
@@ -1066,6 +1144,7 @@ function handleChessSquareClick(sq){
       // Invalid destination: clear selection
       selectedSquare = null;
       legalMovesFromSelected = [];
+      updateMoveNotation('Select a piece to move');
       renderChessBoard();
       return;
     }
@@ -1077,11 +1156,16 @@ function handleChessSquareClick(sq){
     legalMovesFromSelected = [];
 
     if (!move) {
+      updateMoveNotation('Select a piece to move');
       renderChessBoard();
       return;
     }
 
-    lastMove = { from: move.from, to: move.to };
+    lastMove = { from: move.from, to: move.to, captured: move.captured, flags: move.flags, promotion: move.promotion };
+
+    // Show move description
+    updateMoveNotation('Last move: ' + describeMove(lastMove));
+
     renderChessBoard();
     updateChessStatus();
 
@@ -1096,6 +1180,7 @@ function initChess(){
   selectedSquare = null;
   legalMovesFromSelected = [];
   lastMove = null;
+  updateMoveNotation('Select a piece to move');
   renderChessBoard();
   updateChessStatus();
 
@@ -1121,7 +1206,8 @@ function computeChessAI(){
   }
   var move = chess.move(best);
   if (move) {
-    lastMove = { from: move.from, to: move.to };
+    lastMove = { from: move.from, to: move.to, captured: move.captured, flags: move.flags, promotion: move.promotion };
+    updateMoveNotation('AI played: ' + describeMove(lastMove));
   }
   renderChessBoard();
   updateChessStatus();
