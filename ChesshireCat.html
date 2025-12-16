@@ -72,7 +72,7 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 .highlight{background:rgba(233,69,96,0.5)!important;cursor:pointer;}
-.crown{font-size:0.9rem;vertical-align:middle;margin-left:1px;}
+.crown{font-size:0.6em;vertical-align:super;margin-left:-4px;display:inline-block;}
 
 /* ---------- Chessboard ---------- */
 .chessboard{
@@ -85,11 +85,14 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
 .chessboard .square{
   width:45px;height:45px;
   display:flex;align-items:center;justify-content:center;
-  font-family: "Segoe UI Symbol","Noto Sans Symbols","Apple Color Emoji",system-ui,sans-serif;
+  font-family: "Segoe UI Symbol","Noto Sans Symbols","Apple Color Emoji","Segoe UI Emoji",system-ui,sans-serif;
   font-size:36px;
   cursor:pointer;
   transition: background 0.15s;
   user-select:none;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
 }
 .chessboard .white-sq{background:#f0d9b5;}
 .chessboard .black-sq{background:#b58863;}
@@ -104,10 +107,12 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
 table.checkers{border-collapse:collapse;border-radius:4px;overflow:hidden;}
 table.checkers td{width:45px;height:45px;text-align:center;vertical-align:middle;font-size:32px;
   transition: background 0.15s;
+  overflow:hidden;
+  position:relative;
 }
 .light{background:#f0d9b5;}
 .dark{background:#b58863;}
-.piece{cursor:pointer;}
+.piece{cursor:pointer;display:inline-block;line-height:1;position:relative;}
 
 /* Status display */
 .status{
@@ -148,6 +153,12 @@ table.checkers td{width:45px;height:45px;text-align:center;vertical-align:middle
   <select id="opponent">
     <option value="computer">Computer</option>
     <option value="human">2 Players</option>
+  </select>
+
+  <label for="playerColor" id="playerColorLabel">Play as:</label>
+  <select id="playerColor">
+    <option value="white">White</option>
+    <option value="black">Black</option>
   </select>
 
   <label for="skill">Skill:</label>
@@ -826,12 +837,15 @@ class Chess {
    ========================================================== */
 var modeSelect     = document.getElementById('mode');
 var opponentSelect = document.getElementById('opponent');
+var playerColorSelect = document.getElementById('playerColor');
+var playerColorLabel = document.getElementById('playerColorLabel');
 var skillSlider    = document.getElementById('skill');
 var skillLabel     = document.getElementById('skillLabel');
 var newGameBtn     = document.getElementById('newGame');
 
 // Default to "computer" if for some reason the element isn't found yet
 var opponentMode = opponentSelect ? opponentSelect.value : 'computer';
+var playerColor = playerColorSelect ? playerColorSelect.value : 'white';
 
 function setSkillLabel(v){
   var names = ['Very Easy','Easy','Medium','Hard','Very Hard'];
@@ -841,6 +855,23 @@ setSkillLabel(skillSlider.value);
 skillSlider.addEventListener('input', function () {
   setSkillLabel(skillSlider.value);
 });
+
+function updateColorSelectorVisibility(){
+  if (opponentMode === 'computer') {
+    playerColorSelect.style.display = 'inline-block';
+    playerColorLabel.style.display = 'inline';
+    skillSlider.style.display = 'inline-block';
+    document.querySelector('label[for="skill"]').style.display = 'inline';
+    skillLabel.style.display = 'inline';
+  } else {
+    playerColorSelect.style.display = 'none';
+    playerColorLabel.style.display = 'none';
+    skillSlider.style.display = 'none';
+    document.querySelector('label[for="skill"]').style.display = 'none';
+    skillLabel.style.display = 'none';
+  }
+}
+updateColorSelectorVisibility();
 
 function showTab(mode){
   // Hide all tabs
@@ -868,6 +899,14 @@ modeSelect.addEventListener('change', function () {
 if (opponentSelect) {
   opponentSelect.addEventListener('change', function () {
     opponentMode = opponentSelect ? opponentSelect.value : 'computer';
+    updateColorSelectorVisibility();
+    initGame();
+  });
+}
+
+if (playerColorSelect) {
+  playerColorSelect.addEventListener('change', function () {
+    playerColor = playerColorSelect ? playerColorSelect.value : 'white';
     initGame();
   });
 }
@@ -942,9 +981,12 @@ function renderChessBoard(){
 function handleChessSquareClick(sq){
   if (chess.game_over()) return;
 
-  // In computer mode, ignore input while it's black's (AI) turn
-  if (opponentMode === 'computer' && chess.turn() === 'b') {
-    return;
+  // In computer mode, ignore input while it's AI's turn
+  if (opponentMode === 'computer') {
+    var aiColor = playerColor === 'white' ? 'b' : 'w';
+    if (chess.turn() === aiColor) {
+      return;
+    }
   }
 
   if (!selectedSquare) {
@@ -1008,15 +1050,23 @@ function initChess(){
   lastMove = null;
   renderChessBoard();
   updateChessStatus();
+
+  // If player chose black and playing against computer, AI moves first
+  if (opponentMode === 'computer' && playerColor === 'black') {
+    setTimeout(computeChessAI, 200);
+  }
 }
 
 function computeChessAI(){
   if (opponentMode !== 'computer') return;
   if (chess.game_over()) return;
-  if (chess.turn() !== 'b') return; // AI is black
+
+  // AI plays the opposite color of the player
+  var aiColor = playerColor === 'white' ? 'b' : 'w';
+  if (chess.turn() !== aiColor) return;
 
   var depth = Number(skillSlider.value);
-  var best = minimaxRoot(depth, chess, false);
+  var best = minimaxRoot(depth, chess, aiColor === 'w');
   if (!best) {
     updateChessStatus();
     return;
@@ -1042,14 +1092,18 @@ function updateChessStatus() {
     chessStatus.classList.add('gameover');
   } else if (chess.in_check()) {
     if (opponentMode === 'computer') {
-      chessStatus.textContent = chess.turn() === 'w' ? 'White is in check!' : 'Black (AI) is in check!';
+      var playerTurn = (playerColor === 'white' && chess.turn() === 'w') || (playerColor === 'black' && chess.turn() === 'b');
+      var colorName = chess.turn() === 'w' ? 'White' : 'Black';
+      chessStatus.textContent = playerTurn ? colorName + ' (You) is in check!' : colorName + ' (AI) is in check!';
     } else {
       chessStatus.textContent = chess.turn() === 'w' ? 'White is in check!' : 'Black is in check!';
     }
     chessStatus.classList.remove('gameover');
   } else {
     if (opponentMode === 'computer') {
-      chessStatus.textContent = chess.turn() === 'w' ? 'Your turn (White)' : 'AI thinking...';
+      var playerTurn = (playerColor === 'white' && chess.turn() === 'w') || (playerColor === 'black' && chess.turn() === 'b');
+      var colorName = chess.turn() === 'w' ? 'White' : 'Black';
+      chessStatus.textContent = playerTurn ? 'Your turn (' + colorName + ')' : 'AI thinking...';
     } else {
       chessStatus.textContent = chess.turn() === 'w' ? 'White to move' : 'Black to move';
     }
@@ -1178,6 +1232,11 @@ function initCheckers(){
   resetCheckersState();
   renderCheckers();
   updateCheckersStatus();
+
+  // If player chose black and playing against computer, AI moves first
+  if (opponentMode === 'computer' && playerColor === 'black') {
+    setTimeout(computeCheckersAI, 300);
+  }
 }
 
 function resetCheckersState(){
@@ -1233,7 +1292,9 @@ function updateCheckersStatus() {
     checkersStatus.classList.add('gameover');
   } else {
     if (opponentMode === 'computer') {
-      checkersStatus.textContent = CHECKERS.turn === 1 ? 'Your turn (White)' : 'AI thinking...';
+      var playerTurn = (playerColor === 'white' && CHECKERS.turn === 1) || (playerColor === 'black' && CHECKERS.turn === -1);
+      var colorName = CHECKERS.turn === 1 ? 'White' : 'Black';
+      checkersStatus.textContent = playerTurn ? 'Your turn (' + colorName + ')' : 'AI thinking...';
     } else {
       checkersStatus.textContent = CHECKERS.turn === 1 ? 'White to move' : 'Black to move';
     }
@@ -1243,7 +1304,10 @@ function updateCheckersStatus() {
 
 function onCheckersClick(e){
   // In computer mode, ignore clicks when it's AI's turn
-  if (opponentMode === 'computer' && CHECKERS.turn !== 1) return;
+  if (opponentMode === 'computer') {
+    var aiTurn = playerColor === 'white' ? -1 : 1;
+    if (CHECKERS.turn === aiTurn) return;
+  }
   
   var td = e.currentTarget;
   var r = Number(td.dataset.r), c = Number(td.dataset.c);
@@ -1262,9 +1326,12 @@ function onCheckersClick(e){
       clearCheckersHighlights();
       renderCheckers();
       updateCheckersStatus();
-      
-      if (opponentMode === 'computer' && CHECKERS.turn === -1){
-        setTimeout(computeCheckersAI, 300);
+
+      if (opponentMode === 'computer') {
+        var aiTurn = playerColor === 'white' ? -1 : 1;
+        if (CHECKERS.turn === aiTurn) {
+          setTimeout(computeCheckersAI, 300);
+        }
       }
     } else {
       CHECKERS.selected = null;
@@ -1395,6 +1462,12 @@ function makeCheckersMove(fr, fc, tr, tc, captures){
 /* ---- Checkers AI ---- */
 function computeCheckersAI(){
   if (opponentMode !== 'computer') return;
+
+  // AI plays the opposite color of the player
+  // turn: 1 = white, -1 = black
+  var aiTurn = playerColor === 'white' ? -1 : 1;
+  if (CHECKERS.turn !== aiTurn) return;
+
   var depth = Number(skillSlider.value);
   var best = checkersMinimaxRoot(depth, CHECKERS.board, CHECKERS.turn);
   if (!best){

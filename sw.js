@@ -1,9 +1,10 @@
 // sw.js
-const CACHE_NAME = 'chesshire-cat-v1';
+const CACHE_NAME = 'chesshire-cat-v2';
 const ASSETS = [
   './',
   './ChesshireCat.html',
-  './ChesshireCat.png'
+  './ChesshireCat.png',
+  './manifest.webmanifest'
 ];
 
 self.addEventListener('install', event => {
