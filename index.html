@@ -139,12 +139,14 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
   align-items:center;
   justify-content:center;
   line-height:1;
+  pointer-events:none;
+  color:#fff;
+  text-shadow: 0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.5);
 }
-.chessboard .piece.black-pawn{
-  transform:scale(0.75)!important;
+.chessboard .piece.black-piece{
+  color:#2c2c2c;
+  text-shadow: 0 0 2px rgba(255,255,255,0.6), 0 0 4px rgba(255,255,255,0.3);
 }
-.chessboard .piece:active{cursor:grabbing;transform:scale(1.15);}
-.chessboard .piece.black-pawn:active{cursor:grabbing;transform:scale(0.85)!important;}
 .chessboard .piece.dragging{opacity:0.5;}
 
 /* Move notation display */
@@ -989,12 +991,11 @@ var chessStatus = document.getElementById('chessStatus');
 var moveNotation = document.getElementById('moveNotation');
 
 function pieceUnicode(piece){
-  var key = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
+  // Use white pieces for both colors, differentiate by CSS color
   var map = {
-    'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙',
-    'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'
+    'k':'♔','q':'♕','r':'♖','b':'♗','n':'♘','p':'♙'
   };
-  return map[key] || '';
+  return map[piece.type] || '';
 }
 
 function getPieceName(piece) {
@@ -1079,9 +1080,9 @@ function renderChessBoard(){
       if (piece) {
         var span = document.createElement('span');
         span.className = 'piece';
-        // Add special class for black pawns to scale them down
-        if (piece.type === 'p' && piece.color === 'b') {
-          span.className += ' black-pawn';
+        // Add color class for black pieces
+        if (piece.color === 'b') {
+          span.className += ' black-piece';
         }
         span.textContent = pieceUnicode(piece);
         sqDiv.appendChild(span);
