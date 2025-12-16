@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_NAME = 'chesshire-cat-v3';
+const CACHE_NAME = 'chesshire-cat-v5';
 const ASSETS = [
   './',
   './index.html',
