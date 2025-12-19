@@ -72,6 +72,17 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 .highlight{background:rgba(233,69,96,0.5)!important;cursor:pointer;}
+.jump-path{background:rgba(255,165,0,0.4)!important;position:relative;}
+.jump-path::after{
+  content:'↗';
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-size:24px;
+  color:rgba(255,255,255,0.8);
+  pointer-events:none;
+}
 .crown{font-size:0.6em;vertical-align:super;margin-left:-4px;display:inline-block;}
 
 /* ---------- Chessboard ---------- */
@@ -197,7 +208,7 @@ table.checkers td{width:45px;height:45px;text-align:center;vertical-align:middle
 
   <label for="opponent">Opponent:</label>
   <select id="opponent">
-    <option value="computer">Computer</option>
+    <option value="computer">Chessckers</option>
     <option value="human">2 Players</option>
   </select>
 
@@ -1197,7 +1208,7 @@ function computeChessAI(){
   var move = chess.move(best);
   if (move) {
     lastMove = { from: move.from, to: move.to, captured: move.captured, flags: move.flags, promotion: move.promotion };
-    updateMoveNotation('AI played: ' + describeMove(lastMove));
+    updateMoveNotation('Chessckers played: ' + describeMove(lastMove));
   }
   renderChessBoard();
   updateChessStatus();
@@ -1227,7 +1238,7 @@ function updateChessStatus() {
     if (opponentMode === 'computer') {
       var playerTurn = (playerColor === 'white' && chess.turn() === 'w') || (playerColor === 'black' && chess.turn() === 'b');
       var colorName = chess.turn() === 'w' ? 'White' : 'Black';
-      chessStatus.textContent = playerTurn ? 'Your turn (' + colorName + ')' : 'AI thinking...';
+      chessStatus.textContent = playerTurn ? 'Your turn (' + colorName + ')' : 'Chessckers thinking...';
     } else {
       chessStatus.textContent = chess.turn() === 'w' ? 'White to move' : 'Black to move';
     }
@@ -1418,7 +1429,7 @@ function updateCheckersStatus() {
     if (opponentMode === 'computer') {
       var playerTurn = (playerColor === 'white' && CHECKERS.turn === 1) || (playerColor === 'black' && CHECKERS.turn === -1);
       var colorName = CHECKERS.turn === 1 ? 'White' : 'Black';
-      checkersStatus.textContent = playerTurn ? 'Your turn (' + colorName + ')' : 'AI thinking...';
+      checkersStatus.textContent = playerTurn ? 'Your turn (' + colorName + ')' : 'Chessckers thinking...';
     } else {
       checkersStatus.textContent = CHECKERS.turn === 1 ? 'White to move' : 'Black to move';
     }
@@ -1464,7 +1475,8 @@ function onCheckersClick(e){
     return;
   }
 
-  if (piece !== 0 && (opponentMode === 'human' || Math.sign(piece) === CHECKERS.turn)){
+  // Only allow selecting pieces that belong to the current player
+  if (piece !== 0 && Math.sign(piece) === CHECKERS.turn){
     CHECKERS.selected = {r: r, c: c};
     clearCheckersHighlights();
     highlightMoves(r, c);
@@ -1477,12 +1489,23 @@ function highlightMoves(r, c){
   for (var i = 0; i < moves.length; i++){
     var m = moves[i];
     tbl.rows[m.toR].cells[m.toC].classList.add('highlight');
+
+    // Highlight jumped-over squares for captures
+    if (m.captures && m.captures.length > 0) {
+      for (var j = 0; j < m.captures.length; j++) {
+        var cap = m.captures[j];
+        tbl.rows[cap.r].cells[cap.c].classList.add('jump-path');
+      }
+    }
   }
 }
 
 function clearCheckersHighlights(){
-  var tds = document.querySelectorAll('td.highlight');
-  for (var i = 0; i < tds.length; i++) tds[i].classList.remove('highlight');
+  var tds = document.querySelectorAll('td.highlight, td.jump-path');
+  for (var i = 0; i < tds.length; i++) {
+    tds[i].classList.remove('highlight');
+    tds[i].classList.remove('jump-path');
+  }
 }
 
 function getLegalMoves(r, c){
