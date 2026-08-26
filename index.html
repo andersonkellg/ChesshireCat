@@ -83,7 +83,11 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
   color:rgba(255,255,255,0.8);
   pointer-events:none;
 }
-.crown{font-size:0.6em;vertical-align:super;margin-left:-4px;display:inline-block;}
+.jump-path.jump-ul::after{content:'↖';}
+.jump-path.jump-ur::after{content:'↗';}
+.jump-path.jump-dl::after{content:'↙';}
+.jump-path.jump-dr::after{content:'↘';}
+.crown{position:absolute;top:-4px;right:-6px;font-size:0.5em;line-height:1;pointer-events:none;}
 
 /* ---------- Chessboard ---------- */
 .board-wrapper{
@@ -161,12 +165,13 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
 }
 
 /* ---------- Checkers ---------- */
-table.checkers{border-collapse:collapse;border-radius:4px;overflow:hidden;}
+table.checkers{border-collapse:collapse;border-radius:4px;overflow:hidden;table-layout:fixed;}
 table.checkers td{width:45px;height:45px;text-align:center;vertical-align:middle;font-size:32px;
   transition: background 0.15s;
   overflow:hidden;
   position:relative;
 }
+table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 .light{background:#f0d9b5;}
 .dark{background:#b58863;}
 .piece{cursor:pointer;display:inline-block;line-height:1;position:relative;}
@@ -872,8 +877,7 @@ class Chess {
 
   game_over() {
     if (this.moves().length === 0) return true;
-    if (this.half_moves >= 100) return true;
-    return false;
+    return this.in_draw();
   }
 
   in_checkmate() {
@@ -1340,7 +1344,8 @@ var CHECKERS = {
   size: 8,
   board: [],
   turn: 1,
-  selected: null
+  selected: null,
+  lastMove: null
 };
 var checkersStatus = document.getElementById('checkersStatus');
 
@@ -1385,6 +1390,7 @@ function resetCheckersState(){
   CHECKERS.board = s;
   CHECKERS.turn = 1;
   CHECKERS.selected = null;
+  CHECKERS.lastMove = null;
 }
 
 function renderCheckers(){
@@ -1394,6 +1400,10 @@ function renderCheckers(){
     for (var c = 0; c < 8; c++){
       var td = tbl.rows[r].cells[c];
       td.innerHTML = '';
+      var isLastMove = !!CHECKERS.lastMove &&
+        ((CHECKERS.lastMove.from.r === r && CHECKERS.lastMove.from.c === c) ||
+         (CHECKERS.lastMove.to.r === r && CHECKERS.lastMove.to.c === c));
+      td.classList.toggle('last-move', isLastMove);
       var p = CHECKERS.board[r][c];
       if (p !== 0){
         var span = document.createElement('span');
@@ -1411,46 +1421,57 @@ function renderCheckers(){
   }
 }
 
-function updateCheckersStatus() {
-  var flat = [];
+// A player with no pieces left, or no legal move available on their turn,
+// loses immediately - the other player (the last one to move) wins.
+function checkersGameOverInfo(){
+  var whiteCount = 0, blackCount = 0;
   for (var r = 0; r < 8; r++) {
-    for (var c = 0; c < 8; c++) flat.push(CHECKERS.board[r][c]);
-  }
-  var whiteCount = flat.filter(function(p){return p > 0;}).length;
-  var blackCount = flat.filter(function(p){return p < 0;}).length;
-  
-  if (whiteCount === 0) {
-    checkersStatus.textContent = 'Black wins!';
-    checkersStatus.classList.add('gameover');
-  } else if (blackCount === 0) {
-    checkersStatus.textContent = 'White wins!';
-    checkersStatus.classList.add('gameover');
-  } else {
-    if (opponentMode === 'computer') {
-      var playerTurn = (playerColor === 'white' && CHECKERS.turn === 1) || (playerColor === 'black' && CHECKERS.turn === -1);
-      var colorName = CHECKERS.turn === 1 ? 'White' : 'Black';
-      checkersStatus.textContent = playerTurn ? 'Your turn (' + colorName + ')' : 'Chessckers thinking...';
-    } else {
-      checkersStatus.textContent = CHECKERS.turn === 1 ? 'White to move' : 'Black to move';
+    for (var c = 0; c < 8; c++){
+      var p = CHECKERS.board[r][c];
+      if (p > 0) whiteCount++;
+      else if (p < 0) blackCount++;
     }
-    checkersStatus.classList.remove('gameover');
   }
+  if (whiteCount === 0) return { over: true, message: 'Black wins!' };
+  if (blackCount === 0) return { over: true, message: 'White wins!' };
+  if (generateAllMoves(CHECKERS.board, CHECKERS.turn).length === 0) {
+    return { over: true, message: (CHECKERS.turn === 1 ? 'Black wins!' : 'White wins!') + ' (no moves left)' };
+  }
+  return { over: false, message: null };
+}
+
+function updateCheckersStatus() {
+  var info = checkersGameOverInfo();
+  if (info.over) {
+    checkersStatus.textContent = info.message;
+    checkersStatus.classList.add('gameover');
+    return;
+  }
+  if (opponentMode === 'computer') {
+    var playerTurn = (playerColor === 'white' && CHECKERS.turn === 1) || (playerColor === 'black' && CHECKERS.turn === -1);
+    var colorName = CHECKERS.turn === 1 ? 'White' : 'Black';
+    checkersStatus.textContent = playerTurn ? 'Your turn (' + colorName + ')' : 'Chessckers thinking...';
+  } else {
+    checkersStatus.textContent = CHECKERS.turn === 1 ? 'White to move' : 'Black to move';
+  }
+  checkersStatus.classList.remove('gameover');
 }
 
 function onCheckersClick(e){
+  if (checkersGameOverInfo().over) return;
   // In computer mode, ignore clicks when it's AI's turn
   if (opponentMode === 'computer') {
     var aiTurn = playerColor === 'white' ? -1 : 1;
     if (CHECKERS.turn === aiTurn) return;
   }
-  
+
   var td = e.currentTarget;
   var r = Number(td.dataset.r), c = Number(td.dataset.c);
   var piece = CHECKERS.board[r][c];
 
   if (CHECKERS.selected){
     var sr = CHECKERS.selected.r, sc = CHECKERS.selected.c;
-    var legal = getLegalMoves(sr, sc);
+    var legal = checkersLegalMovesForSquare(sr, sc);
     var target = null;
     for (var i = 0; i < legal.length; i++){
       if (legal[i].toR === r && legal[i].toC === c) { target = legal[i]; break; }
@@ -1484,17 +1505,27 @@ function onCheckersClick(e){
 }
 
 function highlightMoves(r, c){
-  var moves = getLegalMoves(r, c);
+  var moves = checkersLegalMovesForSquare(r, c);
   var tbl = document.querySelector('table.checkers');
   for (var i = 0; i < moves.length; i++){
     var m = moves[i];
     tbl.rows[m.toR].cells[m.toC].classList.add('highlight');
 
-    // Highlight jumped-over squares for captures
+    // Highlight jumped-over squares for captures, with an arrow pointing
+    // in the actual direction of that hop (each hop in a multi-jump can
+    // go a different way, so this is recomputed per hop, not fixed).
     if (m.captures && m.captures.length > 0) {
+      var fromR = r, fromC = c;
       for (var j = 0; j < m.captures.length; j++) {
         var cap = m.captures[j];
-        tbl.rows[cap.r].cells[cap.c].classList.add('jump-path');
+        var dr = cap.r > fromR ? 1 : -1;
+        var dc = cap.c > fromC ? 1 : -1;
+        var dirClass = 'jump-' + (dr < 0 ? 'u' : 'd') + (dc < 0 ? 'l' : 'r');
+        var cell = tbl.rows[cap.r].cells[cap.c];
+        cell.classList.add('jump-path');
+        cell.classList.add(dirClass);
+        fromR = cap.r + dr;
+        fromC = cap.c + dc;
       }
     }
   }
@@ -1505,6 +1536,7 @@ function clearCheckersHighlights(){
   for (var i = 0; i < tds.length; i++) {
     tds[i].classList.remove('highlight');
     tds[i].classList.remove('jump-path');
+    tds[i].classList.remove('jump-ul', 'jump-ur', 'jump-dl', 'jump-dr');
   }
 }
 
@@ -1593,6 +1625,20 @@ function getLegalMovesRecursive(r, c, boardCopy, piece){
   return jumps;
 }
 
+// Legal moves for a specific piece, with the mandatory-capture rule applied
+// across the whole board: if ANY of the player's pieces can capture, only
+// capturing moves are legal this turn (a plain move elsewhere is not).
+function checkersLegalMovesForSquare(r, c){
+  var all = generateAllMoves(CHECKERS.board, CHECKERS.turn);
+  var out = [];
+  for (var i = 0; i < all.length; i++){
+    if (all[i].from.r === r && all[i].from.c === c){
+      out.push({ toR: all[i].to.r, toC: all[i].to.c, captures: all[i].captures });
+    }
+  }
+  return out;
+}
+
 function makeCheckersMove(fr, fc, tr, tc, captures){
   var piece = CHECKERS.board[fr][fc];
   CHECKERS.board[fr][fc] = 0;
@@ -1603,12 +1649,17 @@ function makeCheckersMove(fr, fc, tr, tc, captures){
   }
   if (piece === 1 && tr === 0) CHECKERS.board[tr][tc] = 2;
   if (piece === -1 && tr === 7) CHECKERS.board[tr][tc] = -2;
+  CHECKERS.lastMove = { from: {r:fr, c:fc}, to: {r:tr, c:tc} };
   CHECKERS.turn *= -1;
 }
 
 /* ---- Checkers AI ---- */
 function computeCheckersAI(){
   if (opponentMode !== 'computer') return;
+  if (checkersGameOverInfo().over){
+    updateCheckersStatus();
+    return;
+  }
 
   // AI plays the opposite color of the player
   // turn: 1 = white, -1 = black
@@ -1681,6 +1732,7 @@ function checkersMinimax(depth, boardState, turn, alpha, beta){
 
 function generateAllMoves(boardState, turn){
   var all = [];
+  var anyCapture = false;
   for (var r = 0; r < 8; r++) {
     for (var c = 0; c < 8; c++){
       var p = boardState[r][c];
@@ -1691,6 +1743,7 @@ function generateAllMoves(boardState, turn){
         CHECKERS.board = tempBoard;
         for (var i = 0; i < moves.length; i++){
           var m = moves[i];
+          if (m.captures.length) anyCapture = true;
           all.push({
             from: {r:r, c:c},
             to: {r:m.toR, c:m.toC},
@@ -1699,6 +1752,11 @@ function generateAllMoves(boardState, turn){
         }
       }
     }
+  }
+  // Capturing is mandatory: if any piece can capture, non-capturing moves
+  // (even from a different piece) are not legal this turn.
+  if (anyCapture){
+    all = all.filter(function(m){ return m.captures.length > 0; });
   }
   return all;
 }
