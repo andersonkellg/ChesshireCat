@@ -34,9 +34,10 @@ check it yourself.
 3. The last 32 bytes become an **AES-GCM key** that never leaves the page.
    Every message is encrypted with it, and any tampering is detected.
 
-A generated code is 4 words from a list of 494, which gives about 60 billion
-possible codes (~36 bits). That's plenty to keep strangers out of a chess game,
-and the relay slows down anyone trying to guess.
+A generated code is 4 words from a list of 590 short words (six letters or
+fewer), which gives about 121 billion possible codes (~37 bits). That's plenty
+to keep strangers out of a chess game, and the relay slows down anyone trying
+to guess.
 
 ## Guardrails (what happens if someone tries something)
 
