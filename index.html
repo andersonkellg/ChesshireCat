@@ -272,6 +272,11 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
   .code-words input{width:auto;}
   .code-words span{display:none;}
 }
+/* Home-screen app on iPhone: iOS also blurs a strip just below the
+   clock/battery bar, so leave about a line's height of extra room. */
+@media (display-mode: standalone){
+  header{padding-top:calc(2rem + env(safe-area-inset-top));}
+}
 </style>
 </head>
 <body>
