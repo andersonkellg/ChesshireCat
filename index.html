@@ -187,6 +187,8 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
 /* ---------- Checkers ---------- */
 table.checkers{border-collapse:collapse;border-radius:4px;overflow:hidden;table-layout:fixed;}
 table.checkers td{width:var(--square);height:var(--square);text-align:center;vertical-align:middle;font-size:var(--piece);
+  padding:0;        /* no default cell padding, so a square is exactly --square */
+  line-height:1;    /* keeps a piece's text line shorter than its square */
   transition: background 0.15s;
   overflow:hidden;
   position:relative;
@@ -312,6 +314,15 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
     <span class="field" id="skillField">
       <label for="skill">Skill: <span id="skillLabel">Easy</span></label>
       <input type="range" id="skill" min="1" max="5" value="2">
+    </span>
+    <!-- Only in 2-player mode: whether the board turns around for Black's
+         turn (handy when passing one device back and forth) -->
+    <span class="field" id="boardTurnField" hidden>
+      <label for="boardTurn">Board:</label>
+      <select id="boardTurn">
+        <option value="fixed">Stays put</option>
+        <option value="turn">Turns each move</option>
+      </select>
     </span>
     <button id="newGame">New Game</button>
   </header>
@@ -1042,6 +1053,8 @@ var opponentSelect = document.getElementById('opponent');
 var playerColorSelect = document.getElementById('playerColor');
 var colorField     = document.getElementById('colorField');
 var skillField     = document.getElementById('skillField');
+var boardTurnField = document.getElementById('boardTurnField');
+var boardTurnSelect = document.getElementById('boardTurn');
 var skillSlider    = document.getElementById('skill');
 var skillLabel     = document.getElementById('skillLabel');
 var newGameBtn     = document.getElementById('newGame');
@@ -1063,6 +1076,7 @@ function updateColorSelectorVisibility(){
   // "Play as" matters against the computer and online; skill only vs. computer
   colorField.hidden = opponentMode === 'human';
   skillField.hidden = opponentMode !== 'computer';
+  boardTurnField.hidden = opponentMode !== 'human';
 }
 updateColorSelectorVisibility();
 
@@ -1145,6 +1159,9 @@ if (playerColorSelect) {
   });
 }
 
+// Changing the 2-player "Board" setting just turns the board; the game goes on
+boardTurnSelect.addEventListener('change', updateBoardOrientation);
+
 
 /* ==========================================================
    CHESS SECTION – click-to-move UI
@@ -1214,10 +1231,18 @@ function describeMove(move) {
   }
 }
 
-// Black sits at the bottom when the person at this screen plays black
-// (against the computer or online; hot-seat games share one view)
+// Decides which way up the board is drawn. Black's pieces go at the bottom:
+//  - against the computer or online: when the person at this screen plays black
+//  - in 2-player mode: on Black's turn, but only if "Board: Turns each move"
+//    is chosen (players sitting across a table would rather it stay put)
 function updateBoardOrientation(){
-  var flip = opponentMode !== 'human' && localColor() === 'black';
+  var flip;
+  if (opponentMode === 'human') {
+    var blackToMove = modeSelect.value === 'chess' ? chess.turn() === 'b' : CHECKERS.turn === -1;
+    flip = boardTurnSelect.value === 'turn' && blackToMove;
+  } else {
+    flip = localColor() === 'black';
+  }
   document.getElementById('chessTab').classList.toggle('flipped', flip);
   document.getElementById('checkersTab').classList.toggle('flipped', flip);
 }
