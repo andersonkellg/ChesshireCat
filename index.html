@@ -7,7 +7,7 @@
 <!-- Security policy: this page may only load its own files, and the only
      network connection it may open is to the online-play relay. If you run
      your own relay, change the address here AND RELAY_URL in the script. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src wss://chesshirecat-relay.YOUR-ACCOUNT.workers.dev; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src wss://chesshirecat-relay.infidien.workers.dev; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" type="image/png" href="ChesshireCat.png">
 <link rel="apple-touch-icon" sizes="180x180" href="ChesshireCat.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1870,7 +1870,7 @@ function evaluateCheckers(boardState){
 
 // The only server this page talks to. If you run your own relay, change it
 // here AND in the Content-Security-Policy <meta> tag at the top of this file.
-var RELAY_URL = 'wss://chesshirecat-relay.YOUR-ACCOUNT.workers.dev';
+var RELAY_URL = 'wss://chesshirecat-relay.infidien.workers.dev';
 
 /* ---- Secret codes: random words that are easy to read out and type ---- */
 var SecretCode = {
