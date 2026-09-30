@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Chesshire Cat</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <!-- Security policy: this page may only load its own files, and the only
      network connection it may open is to the online-play relay. If you run
      your own relay, change the address here AND RELAY_URL in the script. -->
@@ -35,6 +35,9 @@ body{
 header{
   background:linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
   color:#fff;padding:0.6rem 1rem;
+  /* On iPhone home-screen apps the page runs under the clock/battery bar;
+     the safe-area inset is that bar's height, so nothing sits beneath it. */
+  padding-top:calc(0.6rem + env(safe-area-inset-top));
   display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;
   border-bottom: 1px solid #0f3460;
   box-shadow: 0 2px 10px rgba(0,0,0,0.3);
@@ -158,6 +161,14 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
   line-height:1;
 }
 .chessboard .piece:active{transform:scale(1.1);}
+
+/* Playing black: the board turns around so your pieces are at the bottom.
+   The board rotates, each piece turns back upright, labels run backwards. */
+.flipped .chessboard, .flipped table.checkers{transform:rotate(180deg);}
+.flipped .chessboard .piece, .flipped table.checkers .piece{transform:rotate(180deg);}
+.flipped .chessboard .piece:active{transform:rotate(180deg) scale(1.1);}
+.flipped .board-ranks{flex-direction:column-reverse;}
+.flipped .board-files{flex-direction:row-reverse;}
 .chessboard .piece.dragging{opacity:0.5;}
 
 /* Move notation display */
@@ -230,6 +241,7 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 .online-state{color:#f39422;font-weight:bold;}
 .online-note{
   padding:0.5rem 1rem;
+  padding-bottom:calc(0.5rem + env(safe-area-inset-bottom));   /* clear the iPhone home bar */
   background:#16213e;border-top:1px solid #0f3460;
   color:#a2a2c2;font-size:0.8rem;
 }
@@ -243,6 +255,7 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
   header{
     display:grid;grid-template-columns:56px 1fr 1fr;
     gap:0.4rem 0.6rem;align-items:end;padding:0.5rem 0.75rem;
+    padding-top:calc(0.5rem + env(safe-area-inset-top));
   }
   #logo{width:56px;height:56px;grid-row:span 3;align-self:start;}
   .field{flex-direction:column;align-items:stretch;gap:2px;min-width:0;}
@@ -292,7 +305,7 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
       </select>
     </span>
     <span class="field" id="skillField">
-      <label for="skill">Skill: <span id="skillLabel">Medium</span></label>
+      <label for="skill">Skill: <span id="skillLabel">Easy</span></label>
       <input type="range" id="skill" min="1" max="5" value="2">
     </span>
     <button id="newGame">New Game</button>
@@ -1080,6 +1093,14 @@ function resignedText(){
   return opponentMode === 'online' ? Online.resignText() : null;
 }
 
+// The hint under the chess board before the first move. Online, it only
+// says "Select a piece" once this player can actually move.
+function idlePrompt(){
+  var turn = chess.turn() === 'w' ? 'white' : 'black';
+  if (opponentMode === 'online' && !Online.canMove(turn)) return Online.idleText();
+  return 'Select a piece to move';
+}
+
 function showTab(mode){
   // Hide all tabs
   var tabs = document.querySelectorAll('.tab');
@@ -1188,7 +1209,16 @@ function describeMove(move) {
   }
 }
 
+// Black sits at the bottom when the person at this screen plays black
+// (against the computer or online; hot-seat games share one view)
+function updateBoardOrientation(){
+  var flip = opponentMode !== 'human' && localColor() === 'black';
+  document.getElementById('chessTab').classList.toggle('flipped', flip);
+  document.getElementById('checkersTab').classList.toggle('flipped', flip);
+}
+
 function renderChessBoard(){
+  updateBoardOrientation();
   var boardEl = document.getElementById('board');
   boardEl.innerHTML = '';
   var board = chess.board();
@@ -1315,7 +1345,7 @@ function initChess(){
   selectedSquare = null;
   legalMovesFromSelected = [];
   lastMove = null;
-  updateMoveNotation('Select a piece to move');
+  updateMoveNotation(idlePrompt());
   renderChessBoard();
   updateChessStatus();
 
@@ -1512,6 +1542,7 @@ function resetCheckersState(){
 }
 
 function renderCheckers(){
+  updateBoardOrientation();
   var tbl = document.querySelector('table.checkers');
   if (!tbl) return;
   for (var r = 0; r < 8; r++) {
@@ -2172,6 +2203,7 @@ var Online = (function () {
       selectedSquare = null;
       legalMovesFromSelected = [];
       if (note) updateMoveNotation(note);
+      else if (!game || !game.moves.length) updateMoveNotation(idlePrompt());   // not started yet
       renderChessBoard();
       updateChessStatus();
     } else {
@@ -2617,6 +2649,15 @@ var Online = (function () {
       var key = moveKey(game.mode, m);
       game.moves.push(key);
       send({ t: 'move', n: game.moves.length - 1, m: key });
+    },
+    // Why this player can't move yet (shown under the board before the first move)
+    idleText: function () {
+      if (!session) return 'Create or join a game above to start playing';
+      if (!game) return 'Waiting for the game to start…';
+      if (!session.paired) {
+        return session.peerKnown ? 'Waiting for ' + peer() + ' to come back…' : 'The game starts when your friend joins';
+      }
+      return 'Waiting for ' + peer() + "'s move";
     },
     turnText: function (color) {
       if (!session) return 'Create or join an online game above';
