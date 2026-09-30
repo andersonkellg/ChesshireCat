@@ -2143,8 +2143,10 @@ var Online = (function () {
     ui.reconnect.hidden = true;
     say('Connecting…');
 
+    s.lastHeard = Date.now();
     socket.onmessage = function (e) {
       if (session !== s || typeof e.data !== 'string') return;
+      s.lastHeard = Date.now();
       // One message at a time, in the order they arrived
       s.inbox = s.inbox.then(function () { return receive(s, e.data); }).catch(function () {});
     };
@@ -2152,14 +2154,34 @@ var Online = (function () {
       if (session === s && s.socket === socket) disconnected(e.code);
     };
     clearInterval(s.pinger);
-    s.pinger = setInterval(function () {
-      if (socket.readyState === WebSocket.OPEN) socket.send('ping');
-    }, PING_MS);
+    s.pinger = setInterval(function () { keepAlive(s); }, PING_MS);
+  }
+
+  // Pings the relay, and quietly reconnects if it has stopped answering
+  // (phones often kill connections while the app is in the background).
+  function keepAlive(s){
+    if (session !== s) return;
+    if (s.socket.readyState === WebSocket.OPEN && Date.now() - s.lastHeard < PING_MS * 2.5) {
+      s.socket.send('ping');
+      return;
+    }
+    s.socket.onclose = null;
+    s.socket.close();
+    connect();
   }
 
   function disconnected(code){
-    clearInterval(session.pinger);
-    session.paired = false;
+    var s = session;
+    clearInterval(s.pinger);
+    s.paired = false;
+    // A dropped connection retries by itself a few times (2 s, 4 s, 6 s)
+    // before asking. A full room won't change by retrying, so that one doesn't.
+    if (code !== 4001 && s.retries < 3 && document.visibilityState === 'visible') {
+      s.retries++;
+      say('Connection dropped. Reconnecting…');
+      setTimeout(function () { if (session === s && !s.paired) connect(); }, 2000 * s.retries);
+      return;
+    }
     ui.reconnect.hidden = false;
     if (code === 4001) say('That game already has two players. Double-check the secret code. ' +
       "If you're rejoining after losing signal, wait a minute and tap Reconnect.");
@@ -2202,6 +2224,7 @@ var Online = (function () {
   function fromRelay(s, data){
     var note;
     try { note = JSON.parse(data).relay; } catch (e) { return; }
+    s.retries = 0;   // the relay answered, so the connection is healthy again
     if (note === 'waiting') {
       s.paired = false;
       say('Waiting for your friend… Send them the secret code with Share invite.');
@@ -2335,7 +2358,7 @@ var Online = (function () {
       name: cleanName(ui.name.value) || 'Player',
       tag: toHex(crypto.getRandomValues(new Uint8Array(8))),   // tells our messages from theirs
       seq: 0, peerTag: null, peerSeq: 0, peerName: 'your friend',
-      paired: false, socket: null, pinger: null,
+      paired: false, socket: null, pinger: null, lastHeard: 0, retries: 0,
       rematch: { me: false, peer: false },
       inbox: Promise.resolve(), outbox: Promise.resolve()
     };
@@ -2421,6 +2444,13 @@ var Online = (function () {
   window.addEventListener('pageshow', function (e) {
     if (e.persisted && session) connect();
   });
+  // Coming back to the app (after switching apps or locking the phone):
+  // check the connection right away instead of waiting for the next ping.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible' || !session || !session.socket) return;
+    if (session.socket.readyState === WebSocket.OPEN) session.socket.send('ping');
+    else connect();
+  });
 
   byId('onlineDice').addEventListener('click', function () { ui.code.value = SecretCode.generate(); });
   byId('onlineCreate').addEventListener('click', function () { begin('create'); });
@@ -2428,7 +2458,9 @@ var Online = (function () {
   byId('onlineShare').addEventListener('click', share);
   byId('onlineRematch').addEventListener('click', rematch);
   byId('onlineResign').addEventListener('click', resign);
-  byId('onlineReconnect').addEventListener('click', function () { if (session) connect(); });
+  byId('onlineReconnect').addEventListener('click', function () {
+    if (session) { session.retries = 0; connect(); }
+  });
   byId('onlineLeave').addEventListener('click', leave);
   byId('onlineRelay').textContent = RELAY_URL.replace(/^wss:\/\//, '');
 
