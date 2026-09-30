@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <title>Chesshire Cat</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Security policy: this page may only load its own files, and the only
+     network connection it may open is to the online-play relay. If you run
+     your own relay, change the address here AND RELAY_URL in the script. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src wss://chesshirecat-relay.YOUR-ACCOUNT.workers.dev; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" type="image/png" href="ChesshireCat.png">
 <link rel="apple-touch-icon" sizes="180x180" href="ChesshireCat.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -43,7 +47,7 @@ header select, header input[type="range"]{
   border-radius:4px;
   padding:0.3rem 0.5rem;
 }
-header button{
+header button, .online-panel button{
   background: linear-gradient(135deg, #e94560 0%, #c73659 100%);
   color:#fff;
   border:none;
@@ -53,7 +57,7 @@ header button{
   font-weight:bold;
   transition: transform 0.2s, box-shadow 0.2s;
 }
-header button:hover{
+header button:hover, .online-panel button:hover{
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(233,69,96,0.4);
 }
@@ -194,6 +198,31 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
   0%,100%{box-shadow:0 0 0 0 rgba(233,69,96,0.4);}
   50%{box-shadow:0 0 0 10px rgba(233,69,96,0);}
 }
+
+/* ---------- Online play ---------- */
+.online-panel{
+  background:#16213e;color:#e6e6f0;
+  border-bottom:1px solid #0f3460;
+  padding:0.6rem 1rem;
+  display:flex;flex-direction:column;gap:0.5rem;
+  font-size:0.9rem;
+}
+.online-panel[hidden], .online-panel [hidden]{display:none;}
+.online-row{display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;}
+.online-panel input{
+  background:#0f3460;color:#fff;
+  border:1px solid #e94560;border-radius:4px;
+  padding:0.4rem 0.5rem;font-size:0.95rem;
+}
+#onlineName{width:9rem;}
+#onlineCode{flex:1;min-width:14rem;}
+#onlineCode, .online-panel code{font-family:ui-monospace,Menlo,Consolas,monospace;}
+.online-panel button.secondary{background:#0f3460;border:1px solid #e94560;}
+.online-panel button:disabled{opacity:0.5;cursor:default;transform:none;box-shadow:none;}
+.online-state{color:#f39422;font-weight:bold;}
+.online-note{margin:0;color:#a2a2c2;font-size:0.8rem;}
+.online-note a{color:#a2a2c2;}
+.online-note code{color:#e6e6f0;}
 </style>
 </head>
 <body>
@@ -215,6 +244,7 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
   <select id="opponent">
     <option value="computer">Chessckers</option>
     <option value="human">2 Players</option>
+    <option value="online">Online friend</option>
   </select>
 
   <label for="playerColor" id="playerColorLabel">Play as:</label>
@@ -229,6 +259,35 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 
   <button id="newGame">New Game</button>
 </header>
+
+  <!-- ---------- Online play (shown only for "Online friend") ---------- -->
+  <section id="onlinePanel" class="online-panel" hidden>
+    <div id="onlineSetup" class="online-row">
+      <input id="onlineName" maxlength="20" placeholder="Your name" autocomplete="off">
+      <input id="onlineCode" maxlength="200" placeholder="Secret code (tap 🎲 for a new one)"
+             autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button id="onlineDice" class="secondary" title="Make a new random secret code">🎲</button>
+      <button id="onlineCreate">Create game</button>
+      <button id="onlineJoin">Join game</button>
+    </div>
+    <div id="onlineSession" class="online-row" hidden>
+      <span>Secret code: <code id="onlineCodeShown"></code></span>
+      <button id="onlineShare" class="secondary">Share invite</button>
+      <button id="onlineRematch">Rematch</button>
+      <button id="onlineResign" class="secondary">Resign</button>
+      <button id="onlineReconnect" hidden>Reconnect</button>
+      <button id="onlineLeave" class="secondary">Leave</button>
+    </div>
+    <div id="onlineState" class="online-state" role="status">
+      Tap 🎲 and Create a game, or type your friend's secret code and Join.
+    </div>
+    <p class="online-note">
+      Moves are encrypted on this device with the secret code before they are sent.
+      The relay only passes scrambled messages along and keeps nothing.
+      <a href="https://github.com/andersonkellg/ChesshireCat/blob/main/PRIVACY.md" target="_blank" rel="noopener">How it works</a>
+      · Relay: <code id="onlineRelay"></code>
+    </p>
+  </section>
 
   <main>
     <!-- ---------- Chess tab ---------- -->
@@ -932,21 +991,48 @@ skillSlider.addEventListener('input', function () {
 });
 
 function updateColorSelectorVisibility(){
-  if (opponentMode === 'computer') {
-    playerColorSelect.style.display = 'inline-block';
-    playerColorLabel.style.display = 'inline';
-    skillSlider.style.display = 'inline-block';
-    document.querySelector('label[for="skill"]').style.display = 'inline';
-    skillLabel.style.display = 'inline';
-  } else {
-    playerColorSelect.style.display = 'none';
-    playerColorLabel.style.display = 'none';
-    skillSlider.style.display = 'none';
-    document.querySelector('label[for="skill"]').style.display = 'none';
-    skillLabel.style.display = 'none';
-  }
+  // "Play as" matters against the computer and online; skill only vs. computer
+  var showColor = opponentMode !== 'human';
+  var showSkill = opponentMode === 'computer';
+  playerColorSelect.style.display = showColor ? 'inline-block' : 'none';
+  playerColorLabel.style.display = showColor ? 'inline' : 'none';
+  skillSlider.style.display = showSkill ? 'inline-block' : 'none';
+  document.querySelector('label[for="skill"]').style.display = showSkill ? 'inline' : 'none';
+  skillLabel.style.display = showSkill ? 'inline' : 'none';
 }
 updateColorSelectorVisibility();
+
+// Which color the person at this screen plays (computer and online games)
+function localColor(){
+  return opponentMode === 'online' ? Online.myColor() : playerColor;
+}
+
+// May the person at this screen move `color` ('white'/'black') right now?
+function localPlayerCanMove(color){
+  if (opponentMode === 'human') return true;
+  if (opponentMode === 'online') return Online.canMove(color);
+  return color === playerColor;
+}
+
+// " (You)", " (AI)" or " (Sam)" after a color name; nothing in hot-seat games
+function sideTag(color){
+  if (opponentMode === 'human') return '';
+  if (color === localColor()) return ' (You)';
+  return opponentMode === 'online' ? ' (' + Online.peerName() + ')' : ' (AI)';
+}
+
+// Status line while a game is in progress
+function turnPrompt(color){
+  var name = color === 'white' ? 'White' : 'Black';
+  if (opponentMode === 'human') return name + ' to move';
+  if (opponentMode === 'online') return Online.turnText(color);
+  return color === playerColor ? 'Your turn (' + name + ')' : 'Chessckers thinking...';
+}
+
+// A resignation ends an online game just like checkmate
+function resignedText(){
+  return opponentMode === 'online' ? Online.resignText() : null;
+}
 
 function showTab(mode){
   // Hide all tabs
@@ -975,6 +1061,7 @@ if (opponentSelect) {
   opponentSelect.addEventListener('change', function () {
     opponentMode = opponentSelect ? opponentSelect.value : 'computer';
     updateColorSelectorVisibility();
+    Online.show(opponentMode === 'online');
     initGame();
   });
 }
@@ -1106,13 +1193,8 @@ function renderChessBoard(){
 function handleChessSquareClick(sq){
   if (chess.game_over()) return;
 
-  // In computer mode, ignore input while it's AI's turn
-  if (opponentMode === 'computer') {
-    var aiColor = playerColor === 'white' ? 'b' : 'w';
-    if (chess.turn() === aiColor) {
-      return;
-    }
-  }
+  // Ignore clicks unless it's this player's turn (always true in hot-seat games)
+  if (!localPlayerCanMove(chess.turn() === 'w' ? 'white' : 'black')) return;
 
   if (!selectedSquare) {
     // Start selection if this square has any legal moves
@@ -1174,6 +1256,8 @@ function handleChessSquareClick(sq){
     renderChessBoard();
     updateChessStatus();
 
+    if (opponentMode === 'online') Online.localMove(move);
+
     if (!chess.game_over() && opponentMode === 'computer') {
       setTimeout(computeChessAI, 200);
     }
@@ -1218,36 +1302,24 @@ function computeChessAI(){
   updateChessStatus();
 }
 
+function chessEndText(turn){
+  if (chess.in_checkmate()) return 'Checkmate! ' + (turn === 'white' ? 'Black' : 'White') + ' wins!';
+  if (chess.in_stalemate()) return 'Stalemate! Draw.';
+  if (chess.in_draw()) return 'Draw!';
+  return resignedText();
+}
+
 function updateChessStatus() {
-  if (chess.in_checkmate()) {
-    var winner = chess.turn() === 'w' ? 'Black' : 'White';
-    chessStatus.textContent = 'Checkmate! ' + winner + ' wins!';
-    chessStatus.classList.add('gameover');
-  } else if (chess.in_stalemate()) {
-    chessStatus.textContent = 'Stalemate! Draw.';
-    chessStatus.classList.add('gameover');
-  } else if (chess.in_draw()) {
-    chessStatus.textContent = 'Draw!';
-    chessStatus.classList.add('gameover');
+  var turn = chess.turn() === 'w' ? 'white' : 'black';
+  var ended = chessEndText(turn);
+  if (ended) {
+    chessStatus.textContent = ended;
   } else if (chess.in_check()) {
-    if (opponentMode === 'computer') {
-      var playerTurn = (playerColor === 'white' && chess.turn() === 'w') || (playerColor === 'black' && chess.turn() === 'b');
-      var colorName = chess.turn() === 'w' ? 'White' : 'Black';
-      chessStatus.textContent = playerTurn ? colorName + ' (You) is in check!' : colorName + ' (AI) is in check!';
-    } else {
-      chessStatus.textContent = chess.turn() === 'w' ? 'White is in check!' : 'Black is in check!';
-    }
-    chessStatus.classList.remove('gameover');
+    chessStatus.textContent = (turn === 'white' ? 'White' : 'Black') + sideTag(turn) + ' is in check!';
   } else {
-    if (opponentMode === 'computer') {
-      var playerTurn = (playerColor === 'white' && chess.turn() === 'w') || (playerColor === 'black' && chess.turn() === 'b');
-      var colorName = chess.turn() === 'w' ? 'White' : 'Black';
-      chessStatus.textContent = playerTurn ? 'Your turn (' + colorName + ')' : 'Chessckers thinking...';
-    } else {
-      chessStatus.textContent = chess.turn() === 'w' ? 'White to move' : 'Black to move';
-    }
-    chessStatus.classList.remove('gameover');
+    chessStatus.textContent = turnPrompt(turn);
   }
+  chessStatus.classList.toggle('gameover', !!ended);
 }
 
 /* ---- minimax (alpha-beta) for Chess ---- */
@@ -1442,28 +1514,15 @@ function checkersGameOverInfo(){
 
 function updateCheckersStatus() {
   var info = checkersGameOverInfo();
-  if (info.over) {
-    checkersStatus.textContent = info.message;
-    checkersStatus.classList.add('gameover');
-    return;
-  }
-  if (opponentMode === 'computer') {
-    var playerTurn = (playerColor === 'white' && CHECKERS.turn === 1) || (playerColor === 'black' && CHECKERS.turn === -1);
-    var colorName = CHECKERS.turn === 1 ? 'White' : 'Black';
-    checkersStatus.textContent = playerTurn ? 'Your turn (' + colorName + ')' : 'Chessckers thinking...';
-  } else {
-    checkersStatus.textContent = CHECKERS.turn === 1 ? 'White to move' : 'Black to move';
-  }
-  checkersStatus.classList.remove('gameover');
+  var ended = info.over ? info.message : resignedText();
+  checkersStatus.textContent = ended || turnPrompt(CHECKERS.turn === 1 ? 'white' : 'black');
+  checkersStatus.classList.toggle('gameover', !!ended);
 }
 
 function onCheckersClick(e){
   if (checkersGameOverInfo().over) return;
-  // In computer mode, ignore clicks when it's AI's turn
-  if (opponentMode === 'computer') {
-    var aiTurn = playerColor === 'white' ? -1 : 1;
-    if (CHECKERS.turn === aiTurn) return;
-  }
+  // Ignore clicks unless it's this player's turn (always true in hot-seat games)
+  if (!localPlayerCanMove(CHECKERS.turn === 1 ? 'white' : 'black')) return;
 
   var td = e.currentTarget;
   var r = Number(td.dataset.r), c = Number(td.dataset.c);
@@ -1482,6 +1541,10 @@ function onCheckersClick(e){
       clearCheckersHighlights();
       renderCheckers();
       updateCheckersStatus();
+
+      if (opponentMode === 'online') {
+        Online.localMove({ from: {r: sr, c: sc}, to: {r: r, c: c}, captures: target.captures });
+      }
 
       if (opponentMode === 'computer') {
         var aiTurn = playerColor === 'white' ? -1 : 1;
@@ -1792,6 +1855,613 @@ function evaluateCheckers(boardState){
 }
 
 /* ==========================================================
+   ONLINE PLAY – two players, one secret code
+   ----------------------------------------------------------
+   1. Both players type the same secret code.
+   2. The code is stretched (PBKDF2) into a room ID and an encryption key.
+      Only the room ID is sent to the relay; the key never leaves this page.
+   3. Every message is encrypted (AES-GCM) before it is sent.
+   4. The relay (relay/worker.js) pairs the two players and passes the
+      scrambled messages along. It can't read them and it stores nothing.
+   5. Every incoming move is checked against this page's own rules, so an
+      impossible, out-of-turn or tampered move is simply ignored.
+   The plain-English version is in PRIVACY.md.
+   ========================================================== */
+
+// The only server this page talks to. If you run your own relay, change it
+// here AND in the Content-Security-Policy <meta> tag at the top of this file.
+var RELAY_URL = 'wss://chesshirecat-relay.YOUR-ACCOUNT.workers.dev';
+
+/* ---- Secret codes: random words that are easy to read out and type ---- */
+var SecretCode = {
+  WORDS: `
+    acorn actor adobe agile alarm album alien alley alpine amber anchor angel
+    ankle anvil apple apricot apron arbor arctic arrow atlas attic autumn
+    avocado azure bacon badge bagel baker bamboo banana banjo barley barn
+    basil basket beach beacon beagle beaver berry birch biscuit bison blanket
+    blaze blossom blue bluff boat bold bonfire bonnet boots bottle boulder
+    bounce brave bread breeze brick bridge bright brisk brook broom bubble
+    bucket buckle bugle bunny burrow butter button cabin cactus cake calm
+    camel camera camp candle canoe canyon cape captain caramel carrot castle
+    cedar cello chalk charm cheery cherry chess chestnut chilly chimney cider
+    circus citrus clam clay clever cliff clock cloud clover coast cobalt cocoa
+    coconut comet compass cookie copper coral cosmic cotton cougar cowboy
+    coyote cozy crab crane crayon cricket crisp crown crystal cupcake curly
+    curtain cushion cymbal daisy dancer daring dawn denim desert dew diamond
+    dingo dizzy dolphin domino donkey dragon dreamy drum duck dune dusty eager
+    eagle easel echo eclipse elbow elder ember emerald engine epic falcon fancy
+    feather fern ferry fiddle fig finch fizzy flag flame flute fluffy foggy
+    forest fossil fountain fox frog frosty fudge funky fuzzy galaxy garden
+    garlic gecko gem gentle giant ginger glacier glad glove goat goblin golden
+    goose gopher grape gravy guitar gull hammock hammer happy harbor harp
+    hazel hedge helmet heron hickory hidden hippo honey hoodie hornet horse
+    humble husky igloo iguana indigo island ivory ivy jacket jaguar jam jasmine
+    jelly jester jewel jigsaw jolly juggler juice jumpy jungle kayak kettle
+    kind kiwi kite koala ladder ladle lagoon lake lamp lantern lava leaf lemon
+    lemur lilac lily lime linen lion lively lizard llama lobster locket lotus
+    lucky lunar lynx magic magnet mango maple marble mask meadow mellow melon
+    merry meteor mighty mint misty mitten modest mole monkey moose moss moth
+    mountain muffin mule museum mustard nectar needle nest nickel nimble noble
+    noodle nutmeg oak oasis ocean octopus olive onion opal orbit orchid otter
+    owl oyster paddle panda panther parrot pasta peach peanut pearl pebble
+    pecan pelican penguin pepper piano pickle pigeon pillow pine pirate pizza
+    planet plucky plum pocket polar polite pony popcorn poppy potato prairie
+    pretzel prism proud pudding puffin pumpkin puppet puzzle quail quartz
+    queen quick quiet quill quilt rabbit raccoon radar radish raft rain raisin
+    ranch rapid raven reef ribbon river robin rocket rodeo rose rosy royal
+    ruby rusty saddle sage salmon sandal satchel scarf seal shadow shark shell
+    shiny shovel silent silly silver skate sled sleepy sloth smooth snail snowy
+    sock sofa solar spark sparrow speedy spicy spider spoon spotted spruce
+    squid squirrel star steady stork stormy sugar summit sunny sunset super
+    swan sweater swift swing taco tango teapot tidy tiger timber tiny toast
+    tomato topaz tornado toucan tower trail train trusty tuba tulip tuna turkey
+    turnip turtle umbrella unicorn valley vanilla velvet violin vivid volcano
+    waffle wagon walnut walrus wand warm whale wheat whistle wild willow windy
+    wise witty wizard wolf wombat yacht yak yarn yeti yogurt zany zebra zesty
+    zigzag zinnia
+  `.trim().split(/\s+/),
+  WORDS_PER_CODE: 4,
+  MIN_LETTERS: 12,
+
+  // Picks words with the browser's cryptographic random generator. Numbers
+  // that would make some words slightly more likely than others are skipped.
+  generate: function () {
+    var n = this.WORDS.length;
+    var limit = Math.floor(0x100000000 / n) * n;
+    var pick = new Uint32Array(1);
+    var words = [];
+    while (words.length < this.WORDS_PER_CODE) {
+      crypto.getRandomValues(pick);
+      if (pick[0] < limit) words.push(this.WORDS[pick[0] % n]);
+    }
+    return words.join('-');
+  },
+
+  // "  Velvet Otter_Lantern " -> "velvet-otter-lantern", so capitals and
+  // spacing never matter when a friend types the code in.
+  normalize: function (text) {
+    return String(text).toLowerCase().split(/[\s_.,-]+/).filter(Boolean).join('-');
+  },
+
+  isLongEnough: function (code) {
+    return code.replace(/-/g, '').length >= this.MIN_LETTERS;
+  }
+};
+
+/* ---- Seal: secret code -> room ID + key, and locking/unlocking messages ---- */
+var Seal = {
+  SALT: 'chesshirecat/v1',  // public and fixed; changing it splits old and new versions
+  ITERATIONS: 200000,       // makes every guess at a code deliberately slow
+
+  derive: async function (code) {
+    var utf8 = new TextEncoder();
+    var base = await crypto.subtle.importKey('raw', utf8.encode(code), 'PBKDF2', false, ['deriveBits']);
+    var bits = new Uint8Array(await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: utf8.encode(this.SALT), iterations: this.ITERATIONS },
+      base, 512));
+    return {
+      roomId: toHex(bits.slice(0, 32)),       // first half: told to the relay
+      key: await crypto.subtle.importKey(      // second half: never leaves this page
+        'raw', bits.slice(32), 'AES-GCM', false, ['encrypt', 'decrypt'])
+    };
+  },
+
+  // Encrypts a message. The room ID is mixed in, so a message can't be
+  // replayed into a different room.
+  lock: async function (key, roomId, message) {
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var sealed = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: iv, additionalData: new TextEncoder().encode(roomId) },
+      key, new TextEncoder().encode(JSON.stringify(message)));
+    return toBase64Url(iv) + '.' + toBase64Url(new Uint8Array(sealed));
+  },
+
+  // Returns the message, or null if it wasn't locked with this key or was
+  // changed along the way (AES-GCM detects any tampering).
+  unlock: async function (key, roomId, text) {
+    try {
+      var parts = text.split('.');
+      var plain = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: fromBase64Url(parts[0]), additionalData: new TextEncoder().encode(roomId) },
+        key, fromBase64Url(parts[1]));
+      var message = JSON.parse(new TextDecoder().decode(plain));
+      return message && typeof message === 'object' ? message : null;
+    } catch (e) {
+      return null;
+    }
+  }
+};
+
+function toHex(bytes){
+  var out = '';
+  for (var i = 0; i < bytes.length; i++) out += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
+  return out;
+}
+function toBase64Url(bytes){
+  var s = '';
+  for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function fromBase64Url(text){
+  var s = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+  var bytes = new Uint8Array(s.length);
+  for (var i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
+  return bytes;
+}
+
+/* ---- Moves travel as short, exact strings ----
+   chess:    from + to + promotion        "e2e4", "e7e8q"
+   checkers: from row/col + to row/col + one row/col pair per captured piece
+             "5243" = 5,2 -> 4,3      "523443" = 5,2 -> 3,4 jumping 4,3     */
+function moveKey(mode, m){
+  if (mode === 'chess') return m.from + m.to + (m.promotion || '');
+  var key = '' + m.from.r + m.from.c + m.to.r + m.to.c;
+  for (var i = 0; i < m.captures.length; i++) key += '' + m.captures[i].r + m.captures[i].c;
+  return key;
+}
+
+/* ---- The online session ---- */
+var Online = (function () {
+  var PROTOCOL = 1;        // bump if the message format changes
+  var MAX_MOVES = 2000;    // longest game history we'll accept from the other player
+  var PING_MS = 20000;     // keep-alive; the relay frees seats silent for a minute
+
+  var ui = {
+    panel: byId('onlinePanel'), setup: byId('onlineSetup'), session: byId('onlineSession'),
+    name: byId('onlineName'), code: byId('onlineCode'), codeShown: byId('onlineCodeShown'),
+    state: byId('onlineState'), reconnect: byId('onlineReconnect')
+  };
+
+  var session = null;  // the connection and the two players; null when not online
+  var game = null;     // { mode, myColor, moves: [move keys], resigned: null | 'white' | 'black' }
+  var busy = false;    // true while the secret code is being turned into a key
+
+  function byId(id){ return document.getElementById(id); }
+  function say(text){ ui.state.textContent = text; }
+  function opposite(color){ return color === 'white' ? 'black' : 'white'; }
+  function peer(){ return session ? session.peerName : 'your friend'; }
+
+  // Names come from the other player: keep them short and strip invisible
+  // control and text-direction characters. They're only ever shown as text.
+  function cleanName(text){
+    return String(text || '')
+      .replace(/[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]/g, '')
+      .trim().slice(0, 20);
+  }
+
+  function lockSettings(locked){
+    [modeSelect, opponentSelect, playerColorSelect, newGameBtn].forEach(function (control) {
+      control.disabled = locked;
+    });
+  }
+
+  /* -- the board -- */
+
+  function turnColor(){
+    if (game.mode === 'chess') return chess.turn() === 'w' ? 'white' : 'black';
+    return CHECKERS.turn === 1 ? 'white' : 'black';
+  }
+
+  function isOver(){
+    if (game.resigned) return true;
+    return game.mode === 'chess' ? chess.game_over() : checkersGameOverInfo().over;
+  }
+
+  function resetBoard(mode){
+    if (modeSelect.value !== mode) {
+      modeSelect.value = mode;
+      showTab(mode);   // switches tab and calls initGame()
+    } else {
+      initGame();
+    }
+  }
+
+  // Redraws the board and status after something changed from outside a click
+  function refresh(note){
+    if (modeSelect.value === 'chess') {
+      selectedSquare = null;
+      legalMovesFromSelected = [];
+      if (note) updateMoveNotation(note);
+      renderChessBoard();
+      updateChessStatus();
+    } else {
+      CHECKERS.selected = null;
+      clearCheckersHighlights();
+      renderCheckers();
+      updateCheckersStatus();
+    }
+  }
+
+  // Plays a move only if it exactly matches one of the legal moves right now.
+  // Everything the other player sends goes through here.
+  function playKey(key){
+    if (typeof key !== 'string' || key.length > 40) return false;
+    if (game.mode === 'chess') {
+      var legal = chess.moves({ verbose: true });
+      for (var i = 0; i < legal.length; i++) {
+        if (moveKey('chess', legal[i]) !== key) continue;
+        var done = chess.move({ from: legal[i].from, to: legal[i].to, promotion: legal[i].promotion });
+        if (!done) return false;
+        lastMove = { from: done.from, to: done.to, captured: done.captured, promotion: done.promotion };
+        return true;
+      }
+    } else {
+      var all = generateAllMoves(CHECKERS.board, CHECKERS.turn);
+      for (var j = 0; j < all.length; j++) {
+        var m = all[j];
+        if (moveKey('checkers', m) !== key) continue;
+        makeCheckersMove(m.from.r, m.from.c, m.to.r, m.to.c, m.captures);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Rebuilds a game from move one, checking every move. Moves after the
+  // first `trusted` ones must belong to the other player: nobody gets to
+  // move for you.
+  function rebuild(next, trusted){
+    game = { mode: next.mode, myColor: next.myColor, moves: [], resigned: null };
+    resetBoard(game.mode);
+    for (var i = 0; i < next.moves.length; i++) {
+      if (i >= trusted && turnColor() === game.myColor) return false;
+      if (!playKey(next.moves[i])) return false;
+      game.moves.push(next.moves[i]);
+    }
+    game.resigned = next.resigned;
+    refresh();
+    return true;
+  }
+
+  /* -- the connection -- */
+
+  function connect(){
+    var s = session;
+    var socket = new WebSocket(RELAY_URL + '/room/' + s.roomId);
+    s.socket = socket;
+    s.paired = false;
+    ui.reconnect.hidden = true;
+    say('Connecting…');
+
+    socket.onmessage = function (e) {
+      if (session !== s || typeof e.data !== 'string') return;
+      // One message at a time, in the order they arrived
+      s.inbox = s.inbox.then(function () { return receive(s, e.data); }).catch(function () {});
+    };
+    socket.onclose = function (e) {
+      if (session === s && s.socket === socket) disconnected(e.code);
+    };
+    clearInterval(s.pinger);
+    s.pinger = setInterval(function () {
+      if (socket.readyState === WebSocket.OPEN) socket.send('ping');
+    }, PING_MS);
+  }
+
+  function disconnected(code){
+    clearInterval(session.pinger);
+    session.paired = false;
+    ui.reconnect.hidden = false;
+    if (code === 4001) say('That game already has two players. Double-check the secret code. ' +
+      "If you're rejoining after losing signal, wait a minute and tap Reconnect.");
+    else say('Connection lost. Tap Reconnect to try again. Your game stays on this screen until you leave.');
+    refresh();
+  }
+
+  function send(message){
+    var s = session;
+    if (!s || !s.paired) return;
+    message.from = s.tag;
+    message.seq = ++s.seq;
+    s.outbox = s.outbox
+      .then(function () { return Seal.lock(s.key, s.roomId, message); })
+      .then(function (text) { if (s.socket.readyState === WebSocket.OPEN) s.socket.send(text); })
+      .catch(function () {});
+  }
+
+  async function receive(s, data){
+    if (data === 'pong') return;
+    if (data.charAt(0) === '{') return fromRelay(s, data);
+
+    var msg = await Seal.unlock(s.key, s.roomId, data);
+    if (session !== s || !msg || msg.from === s.tag) return;   // unreadable, or our own echo
+    if (msg.t === 'hello') { s.peerTag = msg.from; s.peerSeq = 0; }
+    if (msg.from !== s.peerTag || !(msg.seq > s.peerSeq)) return;  // stranger or replayed message
+    s.peerSeq = msg.seq;
+
+    switch (msg.t) {
+      case 'hello':   onHello(msg); break;
+      case 'game':    onGame(msg); break;
+      case 'move':    onMove(msg); break;
+      case 'resign':  onResign(); break;
+      case 'rematch': onRematch(); break;
+    }
+  }
+
+  // Plain notes from the relay itself. The relay only forwards encrypted
+  // messages between players, so the other player can't fake these.
+  function fromRelay(s, data){
+    var note;
+    try { note = JSON.parse(data).relay; } catch (e) { return; }
+    if (note === 'waiting') {
+      s.paired = false;
+      say('Waiting for your friend… Send them the secret code with Share invite.');
+    } else if (note === 'paired') {
+      s.paired = true;
+      say('Connected! Saying hello…');
+      send({ t: 'hello', v: PROTOCOL, name: s.name });
+    } else if (note === 'peer-left') {
+      s.paired = false;
+      say(peer() + ' left. They can come back with the same secret code.');
+    }
+    refresh();
+  }
+
+  /* -- messages from the other player -- */
+
+  function onHello(msg){
+    session.peerName = cleanName(msg.name) || 'Friend';
+    if (msg.v !== PROTOCOL) {
+      say(session.peerName + ' has a different version of the game. Both of you: reload the page.');
+      return;
+    }
+    say('Playing with ' + session.peerName + '.');
+    if (game) sendGame();
+    refresh();
+  }
+
+  function sendGame(){
+    send({ t: 'game', mode: game.mode, color: game.myColor, moves: game.moves, resigned: game.resigned });
+  }
+
+  // The other player's copy of the game. We adopt it if we have none (we
+  // joined, or reloaded), or catch up if it is our game plus their newer
+  // moves. Anything else is refused.
+  function onGame(msg){
+    if ((msg.mode !== 'chess' && msg.mode !== 'checkers') ||
+        (msg.color !== 'white' && msg.color !== 'black') ||
+        !Array.isArray(msg.moves) || msg.moves.length > MAX_MOVES) return;
+    // A player can only ever resign for themselves
+    var resigned = msg.resigned === msg.color ? msg.color : null;
+
+    if (game) {
+      if (game.myColor === msg.color || game.mode !== msg.mode) {
+        say('You both pressed Create. One of you: tap Leave, then Join with the same code.');
+        return;
+      }
+      var theyAreAhead = startsWith(msg.moves, game.moves);
+      if (!theyAreAhead) {
+        if (!startsWith(game.moves, msg.moves)) say("Your boards don't match. Tap Rematch to start fresh.");
+        return;   // otherwise they're behind us and will catch up from our copy
+      }
+      if (msg.moves.length === game.moves.length && (game.resigned || !resigned)) return;  // nothing new
+    }
+
+    var before = game;
+    var next = { mode: msg.mode, myColor: opposite(msg.color), moves: msg.moves, resigned: resigned };
+    if (rebuild(next, before ? before.moves.length : next.moves.length)) {
+      say('Playing with ' + peer() + '. You are ' + game.myColor + '.');
+    } else {
+      say("Couldn't load " + peer() + "'s game: it contains a move that isn't allowed.");
+      if (before) rebuild(before, before.moves.length);
+      else { game = null; initGame(); }
+    }
+  }
+
+  function startsWith(list, prefix){
+    if (prefix.length > list.length) return false;
+    for (var i = 0; i < prefix.length; i++) if (list[i] !== prefix[i]) return false;
+    return true;
+  }
+
+  function onMove(msg){
+    if (!game || isOver()) return;
+    if (msg.n !== game.moves.length) return;       // out of order or a duplicate
+    if (turnColor() === game.myColor) return;      // not their turn
+    if (!playKey(msg.m)) return;                   // not a legal move
+    game.moves.push(msg.m);
+    refresh(game.mode === 'chess' ? peer() + ' played: ' + describeMove(lastMove) : null);
+  }
+
+  function onResign(){
+    if (!game || isOver()) return;
+    game.resigned = opposite(game.myColor);
+    refresh();
+  }
+
+  function onRematch(){
+    if (!game) return;
+    session.rematch.peer = true;
+    if (session.rematch.me) startRematch();
+    else say(peer() + ' wants a rematch! Tap Rematch to play again.');
+  }
+
+  // Both players asked: same game type, colors swap
+  function startRematch(){
+    session.rematch = { me: false, peer: false };
+    game = { mode: game.mode, myColor: opposite(game.myColor), moves: [], resigned: null };
+    resetBoard(game.mode);
+    say('New game! You are ' + game.myColor + '.');
+  }
+
+  /* -- buttons -- */
+
+  async function begin(role){
+    if (session || busy) return;
+    if (!window.crypto || !crypto.subtle || !window.WebSocket) {
+      say('Online play needs a modern browser and a secure (https) page.');
+      return;
+    }
+    var code = SecretCode.normalize(ui.code.value);
+    if (!code && role === 'create') code = SecretCode.generate();
+    if (!SecretCode.isLongEnough(code)) {
+      say('A secret code needs at least ' + SecretCode.MIN_LETTERS + ' letters. Tap 🎲 for a strong one.');
+      return;
+    }
+    ui.code.value = code;
+    busy = true;
+    say('Preparing the secret code…');
+    var keys;
+    try {
+      keys = await Seal.derive(code);
+    } catch (e) {
+      say("This browser couldn't prepare the secret code. Try Safari, Chrome or Firefox.");
+      return;
+    } finally {
+      busy = false;
+    }
+
+    session = {
+      code: code, roomId: keys.roomId, key: keys.key,
+      name: cleanName(ui.name.value) || 'Player',
+      tag: toHex(crypto.getRandomValues(new Uint8Array(8))),   // tells our messages from theirs
+      seq: 0, peerTag: null, peerSeq: 0, peerName: 'your friend',
+      paired: false, socket: null, pinger: null,
+      rematch: { me: false, peer: false },
+      inbox: Promise.resolve(), outbox: Promise.resolve()
+    };
+    lockSettings(true);
+    ui.codeShown.textContent = code;
+    ui.setup.hidden = true;
+    ui.session.hidden = false;
+
+    if (role === 'create') {
+      game = { mode: modeSelect.value, myColor: playerColor, moves: [], resigned: null };
+      resetBoard(game.mode);
+    } else {
+      game = null;   // the creator's game arrives once we're connected
+      initGame();
+    }
+    connect();
+  }
+
+  function leave(){
+    if (!session) return;
+    var s = session;
+    session = null;
+    game = null;
+    clearInterval(s.pinger);
+    if (s.socket) s.socket.close(1000, 'bye');
+    ui.setup.hidden = false;
+    ui.session.hidden = true;
+    ui.reconnect.hidden = true;
+    lockSettings(false);
+    say('You left the game. Nothing about it was saved.');
+    initGame();
+  }
+
+  function resign(){
+    if (!game || isOver() || !window.confirm('Resign this game?')) return;
+    game.resigned = game.myColor;
+    send({ t: 'resign' });
+    refresh();
+  }
+
+  function rematch(){
+    if (!session || !session.paired || !game) return;
+    session.rematch.me = true;
+    send({ t: 'rematch' });
+    if (session.rematch.peer) startRematch();
+    else say('Rematch asked. Waiting for ' + peer() + '…');
+  }
+
+  // The invite puts the code after "#", a part of the link browsers never
+  // send to any website.
+  function share(){
+    if (!session) return;
+    var link = location.href.split('#')[0] + '#join=' + encodeURIComponent(session.code);
+    var text = 'Play Chesshire Cat with me! ' + link + '\nSecret code: ' + session.code;
+    if (navigator.share) {
+      navigator.share({ text: text }).catch(function () {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function () { say('Invite copied. Paste it to your friend.'); });
+    } else {
+      window.prompt('Copy this and send it to your friend:', text);
+    }
+  }
+
+  // Opening an invite link fills in the code, then wipes it from the address bar
+  function readInvite(){
+    var match = location.hash.match(/^#join=(.+)$/);
+    if (!match || session) return;
+    history.replaceState(null, '', location.href.split('#')[0]);
+    try { ui.code.value = SecretCode.normalize(decodeURIComponent(match[1])); } catch (e) { return; }
+    opponentSelect.value = 'online';
+    opponentMode = 'online';
+    updateColorSelectorVisibility();
+    ui.panel.hidden = false;
+    say("You've been invited! Type your name, then tap Join game.");
+  }
+  window.addEventListener('hashchange', readInvite);   // invite opened in a tab already showing the game
+
+  // Closing or leaving the tab frees our seat right away instead of leaving a
+  // ghost behind; coming back via the browser's Back button reconnects.
+  window.addEventListener('pagehide', function () {
+    if (session && session.socket) session.socket.close(1000, 'bye');
+  });
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted && session) connect();
+  });
+
+  byId('onlineDice').addEventListener('click', function () { ui.code.value = SecretCode.generate(); });
+  byId('onlineCreate').addEventListener('click', function () { begin('create'); });
+  byId('onlineJoin').addEventListener('click', function () { begin('join'); });
+  byId('onlineShare').addEventListener('click', share);
+  byId('onlineRematch').addEventListener('click', rematch);
+  byId('onlineResign').addEventListener('click', resign);
+  byId('onlineReconnect').addEventListener('click', function () { if (session) connect(); });
+  byId('onlineLeave').addEventListener('click', leave);
+  byId('onlineRelay').textContent = RELAY_URL.replace(/^wss:\/\//, '');
+
+  return {
+    show: function (visible) { ui.panel.hidden = !visible; },
+    readInvite: readInvite,
+    myColor: function () { return game ? game.myColor : playerColor; },
+    peerName: peer,
+    canMove: function (color) {
+      return !!(session && session.paired && game && !game.resigned && color === game.myColor);
+    },
+    // Called right after the local player makes a move on the board
+    localMove: function (m) {
+      if (!game) return;
+      var key = moveKey(game.mode, m);
+      game.moves.push(key);
+      send({ t: 'move', n: game.moves.length - 1, m: key });
+    },
+    turnText: function (color) {
+      if (!session) return 'Create or join an online game above';
+      if (!game) return 'Waiting for the game to start…';
+      if (!session.paired) return 'Waiting for ' + peer() + ' to connect…';
+      var name = color === 'white' ? 'White' : 'Black';
+      return color === game.myColor ? 'Your turn (' + name + ')' : peer() + "'s turn (" + name + ')';
+    },
+    resignText: function () {
+      if (!game || !game.resigned) return null;
+      return game.resigned === game.myColor ? 'You resigned. ' + peer() + ' wins!' : peer() + ' resigned. You win!';
+    }
+  };
+})();
+
+/* ==========================================================
    GLOBAL INITIALIZATION
    ========================================================== */
 function initGame(){
@@ -1801,20 +2471,12 @@ function initGame(){
     initCheckers();
   }
 }
+Online.readInvite();
+Online.show(opponentMode === 'online');
 initGame();
 newGameBtn.addEventListener('click', initGame);
 </script>
 
-<script>
-// Simple service worker registration for offline support
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(err => {
-      console.error('Service worker registration failed:', err);
-    });
-  });
-}
-</script>
 <script>
 if (
   'serviceWorker' in navigator &&

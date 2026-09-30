@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_NAME = 'chesshire-cat-v6';
+const CACHE_NAME = 'chesshire-cat-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -24,9 +24,11 @@ self.addEventListener('activate', event => {
 });
 
 // Network-first: always try to serve the freshest copy so page updates show
-// up immediately, falling back to the cache when offline.
+// up immediately, falling back to the cache when offline. Only this site's
+// own files are cached; game traffic is a WebSocket and never passes here.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  if (new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(
     fetch(event.request)
       .then(resp => {

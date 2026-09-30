@@ -1,0 +1,29 @@
+# Cloudflare Worker config for the Chesshire Cat relay. See relay/README.md.
+name = "chesshirecat-relay"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# Privacy: no Workers Logs and no traces. The code never logs anything either.
+[observability]
+enabled = false
+
+[vars]
+# Web pages allowed to connect. "null" means the game opened as a local file.
+ALLOWED_ORIGINS = "https://andersonkellg.github.io,null"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+# SQLite-backed rooms are required on the free plan. The code never writes
+# to storage; each room only holds its two live connections.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+# At most 20 room joins per minute from one IP address (slows code guessing).
+# Optional: delete this block and the relay still works without it.
+[[ratelimits]]
+name = "JOIN_LIMITER"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
