@@ -43,6 +43,8 @@ under the Worker's *Settings → Domains & Routes* in the Cloudflare dashboard.
 
 - 2 players per room
 - Messages must be encrypted, at most 64 KB, and at most 120 per minute per player
+- Each player sends a random seat number. Reconnecting with the same number
+  takes the seat straight back (e.g. after a phone's screen slept)
 - A seat silent for 60 seconds (lost signal) is freed for whoever joins next
 
 ## Run it locally

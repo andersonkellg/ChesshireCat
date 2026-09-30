@@ -9,7 +9,9 @@
  *           exists while someone is connected to it.
  *
  * The whole protocol, as the relay sees it:
- *   browser -> relay    GET /room/<64 hex chars>     WebSocket upgrade
+ *   browser -> relay    GET /room/<64 hex>?seat=<32 hex>   WebSocket upgrade
+ *                       (the seat is a random number each player picks, so a
+ *                       player who reconnects gets their own seat back)
  *   relay   -> browser  {"relay":"waiting"}          first player is in
  *   relay   -> both     {"relay":"paired"}           second player is in
  *   browser -> relay    "<base64url>.<base64url>"    passed to the other player untouched
@@ -25,6 +27,7 @@ const MAX_MESSAGES_PER_MINUTE = 120;
 // lost signal without saying goodbye, so it's given up to whoever arrives next.
 const GHOST_AFTER_MS = 60_000;
 const ROOM_PATH = /^\/room\/([0-9a-f]{64})$/;
+const SEAT = /^[0-9a-f]{32}$/;
 // What an encrypted message looks like (12-byte IV "." ciphertext). Nothing
 // else is forwarded, so players can't send each other plain text or fake
 // relay notes.
@@ -42,6 +45,8 @@ export default {
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected a WebSocket\n', { status: 426 });
     }
+    const seat = url.searchParams.get('seat');
+    if (seat !== null && !SEAT.test(seat)) return new Response('Bad seat\n', { status: 400 });
     if (!originAllowed(request.headers.get('Origin'), env.ALLOWED_ORIGINS)) {
       return new Response('Forbidden\n', { status: 403 });
     }
@@ -73,10 +78,11 @@ export class Room extends DurableObject {
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
 
-  async fetch() {
+  async fetch(request) {
     const [client, server] = Object.values(new WebSocketPair());
+    const seat = new URL(request.url).searchParams.get('seat');
 
-    this.releaseGhostSeats();
+    this.releaseGhostSeats(seat);
     if (this.players().length >= SEATS) {
       server.accept();
       server.close(4001, 'room-full');
@@ -84,7 +90,7 @@ export class Room extends DurableObject {
     }
 
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ lastSeen: Date.now(), windowStart: Date.now(), count: 0 });
+    server.serializeAttachment({ seat, lastSeen: Date.now(), windowStart: Date.now(), count: 0 });
 
     const players = this.players();
     if (players.length === SEATS) {
@@ -134,15 +140,18 @@ export class Room extends DurableObject {
     return this.ctx.getWebSockets().filter((ws) => ws.readyState === WebSocket.OPEN);
   }
 
-  releaseGhostSeats() {
+  // Frees seats held by connections that are gone: the arriving player's own
+  // earlier connection (same seat number), or one that's been silent too long.
+  releaseGhostSeats(seat) {
     const now = Date.now();
     for (const ws of this.players()) {
       const info = ws.deserializeAttachment() || {};
       const pinged = this.ctx.getWebSocketAutoResponseTimestamp(ws);
       const lastSeen = Math.max(info.lastSeen || 0, pinged ? pinged.getTime() : 0);
-      if (now - lastSeen > GHOST_AFTER_MS) {
+      const sameSeat = seat !== null && info.seat === seat;
+      if (sameSeat || now - lastSeen > GHOST_AFTER_MS) {
         ws.serializeAttachment({ ...info, ghost: true });
-        ws.close(4000, 'timed-out');
+        ws.close(4000, sameSeat ? 'replaced' : 'timed-out');
       }
     }
   }

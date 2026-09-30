@@ -21,7 +21,7 @@ check it yourself.
 | Who | Can see | Can't see |
 |---|---|---|
 | **Your friend** | Your name, your moves | Your IP address, anything else on your device |
-| **The relay** (Cloudflare) | That *a* room is in use, when, and the IP addresses connecting to it | Names, moves, the secret code, which game you're playing |
+| **The relay** (Cloudflare) | That *a* room is in use, when, the IP addresses connecting to it, and a random seat number per player (so a reconnecting phone gets its own seat back) | Names, moves, the secret code, which game you're playing |
 | **GitHub** (hosts the page) | That someone loaded the page | Anything about games |
 | **Anyone else** | Nothing | Everything |
 
@@ -44,7 +44,7 @@ and the relay slows down anyone trying to guess.
 |---|---|
 | Move your pieces, move twice, or make an illegal move | Your page checks every move against its own rules and ignores anything invalid. |
 | Rewrite the game's history or claim you resigned | Refused. Only your own moves come from you, and a player can only resign for themselves. |
-| Join a game that already has two players | The relay turns them away. |
+| Join a game that already has two players | The relay turns them away. Taking over a player's seat would need their random seat number, which only their own device knows. |
 | Guess secret codes | 20 tries per minute per IP address, against billions of codes. |
 | Send plain text, fake "your friend left" notes, or huge or rapid messages | The relay only forwards encrypted messages and disconnects anyone who floods it. |
 | Use a name with HTML or invisible characters | Names are cut to 20 characters, cleaned, and only ever shown as plain text. |
@@ -59,8 +59,8 @@ and the relay slows down anyone trying to guess.
   this project's control.
 - **Anyone who has your secret code can join.** Only send it to your friend.
   If a stranger gets it, just Leave and make a new one.
-- **Short homemade codes are weaker.** The 🎲 button makes strong ones; typed
-  codes must be at least 12 letters.
+- **Homemade codes are weaker.** The 🎲 button makes strong ones; typed codes
+  must be four words with at least 12 letters in total.
 - **You trust the page you load.** If the hosted page were ever altered, it
   could leak moves. See "Check it yourself" below.
 

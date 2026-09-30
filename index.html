@@ -33,12 +33,6 @@ header{
   border-bottom: 1px solid #0f3460;
   box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
-header h1{margin:0;font-size:1.4rem;display:flex;align-items:center;gap:0.5rem;flex:1;
-  background: linear-gradient(90deg, #e94560, #f39422);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
 header select, header input[type="range"]{
   margin-left:0.3rem;
   background:#0f3460;
@@ -209,18 +203,26 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 }
 .online-panel[hidden], .online-panel [hidden]{display:none;}
 .online-row{display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;}
-.online-panel input{
+.online-panel input, .online-panel select{
   background:#0f3460;color:#fff;
   border:1px solid #e94560;border-radius:4px;
-  padding:0.4rem 0.5rem;font-size:0.95rem;
+  padding:0.4rem 0.5rem;font-size:1rem;   /* 16px+ keeps iOS from zooming in */
 }
 #onlineName{width:9rem;}
-#onlineCode{flex:1;min-width:14rem;}
-#onlineCode, .online-panel code{font-family:ui-monospace,Menlo,Consolas,monospace;}
+.code-words{display:flex;align-items:center;gap:0.25rem;flex:1 1 18rem;min-width:0;}
+.code-words input{flex:1;width:0;min-width:0;text-transform:lowercase;}
+.code-words span{color:#a2a2c2;}
+.code-words input, .online-panel code, .online-note code{font-family:ui-monospace,Menlo,Consolas,monospace;}
+.online-next{display:inline-flex;gap:0.25rem;}
 .online-panel button.secondary{background:#0f3460;border:1px solid #e94560;}
 .online-panel button:disabled{opacity:0.5;cursor:default;transform:none;box-shadow:none;}
 .online-state{color:#f39422;font-weight:bold;}
-.online-note{margin:0;color:#a2a2c2;font-size:0.8rem;}
+.online-note{
+  padding:0.5rem 1rem;
+  background:#16213e;border-top:1px solid #0f3460;
+  color:#a2a2c2;font-size:0.8rem;
+}
+.online-note[hidden]{display:none;}
 .online-note a{color:#a2a2c2;}
 .online-note code{color:#e6e6f0;}
 </style>
@@ -228,7 +230,6 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 <body>
 <div id="app">
   <header>
-    <h1>♞ Chesshire Cat ♞</h1>
     <!-- LOGO -->
     <img id="logo"
          src="data:image/png;base64,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"
@@ -264,8 +265,13 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
   <section id="onlinePanel" class="online-panel" hidden>
     <div id="onlineSetup" class="online-row">
       <input id="onlineName" maxlength="20" placeholder="Your name" autocomplete="off">
-      <input id="onlineCode" maxlength="200" placeholder="Secret code (tap 🎲 for a new one)"
-             autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <!-- One box per word; spaces, dashes and capitals are handled for you -->
+      <div id="onlineCode" class="code-words">
+        <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="secret" aria-label="Secret code, word 1"><span>-</span>
+        <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="code" aria-label="Secret code, word 2"><span>-</span>
+        <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="four" aria-label="Secret code, word 3"><span>-</span>
+        <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="words" aria-label="Secret code, word 4">
+      </div>
       <button id="onlineDice" class="secondary" title="Make a new random secret code">🎲</button>
       <button id="onlineCreate">Create game</button>
       <button id="onlineJoin">Join game</button>
@@ -273,7 +279,13 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
     <div id="onlineSession" class="online-row" hidden>
       <span>Secret code: <code id="onlineCodeShown"></code></span>
       <button id="onlineShare" class="secondary">Share invite</button>
-      <button id="onlineRematch">Rematch</button>
+      <span class="online-next">
+        <select id="onlineNextMode" aria-label="Next game">
+          <option value="chess">Chess</option>
+          <option value="checkers">Checkers</option>
+        </select>
+        <button id="onlineNewGame">New game</button>
+      </span>
       <button id="onlineResign" class="secondary">Resign</button>
       <button id="onlineReconnect" hidden>Reconnect</button>
       <button id="onlineLeave" class="secondary">Leave</button>
@@ -281,12 +293,6 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
     <div id="onlineState" class="online-state" role="status">
       Tap 🎲 and Create a game, or type your friend's secret code and Join.
     </div>
-    <p class="online-note">
-      Moves are encrypted on this device with the secret code before they are sent.
-      The relay only passes scrambled messages along and keeps nothing.
-      <a href="https://github.com/andersonkellg/ChesshireCat/blob/main/PRIVACY.md" target="_blank" rel="noopener">How it works</a>
-      · Relay: <code id="onlineRelay"></code>
-    </p>
   </section>
 
   <main>
@@ -315,6 +321,13 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
       <div id="checkersStatus" class="status">Your turn (White)</div>
     </section>
   </main>
+
+  <footer id="onlineNote" class="online-note" hidden>
+    Moves are encrypted on this device with the secret code before they are sent.
+    The relay only passes scrambled messages along and keeps nothing.
+    <a href="https://github.com/andersonkellg/ChesshireCat/blob/main/PRIVACY.md" target="_blank" rel="noopener">How it works</a>
+    · Relay: <code id="onlineRelay"></code>
+  </footer>
 </div>
 
 <script>
@@ -1943,8 +1956,11 @@ var SecretCode = {
     return String(text).toLowerCase().split(/[\s_.,-]+/).filter(Boolean).join('-');
   },
 
-  isLongEnough: function (code) {
-    return code.replace(/-/g, '').length >= this.MIN_LETTERS;
+  // Four words and at least 12 letters: four very short homemade words would
+  // be too easy for a stranger to guess.
+  isStrongEnough: function (code) {
+    return code.split('-').length >= this.WORDS_PER_CODE &&
+      code.replace(/-/g, '').length >= this.MIN_LETTERS;
   }
 };
 
@@ -2022,14 +2038,16 @@ function moveKey(mode, m){
 
 /* ---- The online session ---- */
 var Online = (function () {
-  var PROTOCOL = 1;        // bump if the message format changes
+  var PROTOCOL = 2;        // bump if the message format changes
   var MAX_MOVES = 2000;    // longest game history we'll accept from the other player
   var PING_MS = 20000;     // keep-alive; the relay frees seats silent for a minute
+  var MODES = ['chess', 'checkers'];
 
   var ui = {
     panel: byId('onlinePanel'), setup: byId('onlineSetup'), session: byId('onlineSession'),
-    name: byId('onlineName'), code: byId('onlineCode'), codeShown: byId('onlineCodeShown'),
-    state: byId('onlineState'), reconnect: byId('onlineReconnect')
+    name: byId('onlineName'), codeShown: byId('onlineCodeShown'), note: byId('onlineNote'),
+    words: Array.prototype.slice.call(byId('onlineCode').querySelectorAll('input')),
+    nextMode: byId('onlineNextMode'), state: byId('onlineState'), reconnect: byId('onlineReconnect')
   };
 
   var session = null;  // the connection and the two players; null when not online
@@ -2045,7 +2063,7 @@ var Online = (function () {
   // control and text-direction characters. They're only ever shown as text.
   function cleanName(text){
     return String(text || '')
-      .replace(/[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]/g, '')
+      .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, '')
       .trim().slice(0, 20);
   }
 
@@ -2054,6 +2072,39 @@ var Online = (function () {
       control.disabled = locked;
     });
   }
+
+  /* -- the four secret-code boxes -- */
+
+  function readCode(){
+    return SecretCode.normalize(ui.words.map(function (box) { return box.value; }).join(' '));
+  }
+
+  function fillCode(code){
+    var words = SecretCode.normalize(code).split('-');
+    words.push(words.splice(3).join('-'));   // a longer homemade code keeps its extra words in box 4
+    ui.words.forEach(function (box, i) { box.value = words[i] || ''; });
+  }
+
+  // Everything typed is lowercased (iOS likes to capitalize). A space or dash
+  // jumps to the next box, and a pasted code spreads across all four.
+  ui.words.forEach(function (box, i) {
+    var last = ui.words.length - 1;
+    box.addEventListener('input', function () {
+      var parts = box.value.toLowerCase().split(/[\s_.,-]+/);
+      var j = i;
+      box.value = parts[0];
+      for (var p = 1; p < parts.length; p++) {
+        if (!parts[p]) continue;
+        if (j < last) ui.words[++j].value = parts[p];
+        else ui.words[last].value += '-' + parts[p];
+      }
+      if (parts.length > 1) ui.words[Math.min(j === i ? i + 1 : j, last)].focus();
+    });
+    box.addEventListener('keydown', function (e) {
+      if (e.key === 'Backspace' && !box.value && i > 0) { e.preventDefault(); ui.words[i - 1].focus(); }
+      if (e.key === 'Enter' && i < last) { e.preventDefault(); ui.words[i + 1].focus(); }
+    });
+  });
 
   /* -- the board -- */
 
@@ -2068,6 +2119,7 @@ var Online = (function () {
   }
 
   function resetBoard(mode){
+    ui.nextMode.value = mode;
     if (modeSelect.value !== mode) {
       modeSelect.value = mode;
       showTab(mode);   // switches tab and calls initGame()
@@ -2137,7 +2189,9 @@ var Online = (function () {
 
   function connect(){
     var s = session;
-    var socket = new WebSocket(RELAY_URL + '/room/' + s.roomId);
+    // The seat number lets the relay hand our seat straight back to us after
+    // a dropped connection, instead of keeping it for a ghost of our old one.
+    var socket = new WebSocket(RELAY_URL + '/room/' + s.roomId + '?seat=' + s.seat);
     s.socket = socket;
     s.paired = false;
     ui.reconnect.hidden = true;
@@ -2174,19 +2228,27 @@ var Online = (function () {
     var s = session;
     clearInterval(s.pinger);
     s.paired = false;
-    // A dropped connection retries by itself a few times (2 s, 4 s, 6 s)
-    // before asking. A full room won't change by retrying, so that one doesn't.
-    if (code !== 4001 && s.retries < 3 && document.visibilityState === 'visible') {
+    refresh();
+    if (code === 4001) {
+      ui.reconnect.hidden = false;
+      say('That game already has two players. Double-check the secret code. ' +
+        'If you were just playing in it, tap Reconnect in a minute.');
+      return;
+    }
+    // Screen off or app in the background: reconnect when it's back on screen
+    if (document.visibilityState !== 'visible') {
+      say("Paused while the screen is off. Reconnects when you're back.");
+      return;
+    }
+    // On screen: retry by itself a few times (after 2 s, 4 s, 6 s) before asking
+    if (s.retries < 3) {
       s.retries++;
       say('Connection dropped. Reconnecting…');
       setTimeout(function () { if (session === s && !s.paired) connect(); }, 2000 * s.retries);
       return;
     }
     ui.reconnect.hidden = false;
-    if (code === 4001) say('That game already has two players. Double-check the secret code. ' +
-      "If you're rejoining after losing signal, wait a minute and tap Reconnect.");
-    else say('Connection lost. Tap Reconnect to try again. Your game stays on this screen until you leave.');
-    refresh();
+    say('Connection lost. Tap Reconnect to try again. Your game stays on this screen until you leave.');
   }
 
   function send(message){
@@ -2215,7 +2277,8 @@ var Online = (function () {
       case 'game':    onGame(msg); break;
       case 'move':    onMove(msg); break;
       case 'resign':  onResign(); break;
-      case 'rematch': onRematch(); break;
+      case 'newgame': onNewGame(msg); break;
+      case 'bye':     onBye(); break;
     }
   }
 
@@ -2227,14 +2290,20 @@ var Online = (function () {
     s.retries = 0;   // the relay answered, so the connection is healthy again
     if (note === 'waiting') {
       s.paired = false;
-      say('Waiting for your friend… Send them the secret code with Share invite.');
+      say(s.peerKnown ? 'Connected. Waiting for ' + peer() + ' to come back…'
+                      : 'Waiting for your friend… Send them the secret code with Share invite.');
     } else if (note === 'paired') {
       s.paired = true;
       say('Connected! Saying hello…');
       send({ t: 'hello', v: PROTOCOL, name: s.name });
     } else if (note === 'peer-left') {
       s.paired = false;
-      say(peer() + ' left. They can come back with the same secret code.');
+      // Leaving on purpose sends "bye" first; without one, their connection dropped
+      if (s.peerAway !== 'left') {
+        s.peerAway = 'dropped';
+        say(peer() + "'s connection dropped (maybe their screen went to sleep). " +
+          "Your game is safe and carries on when they're back.");
+      }
     }
     refresh();
   }
@@ -2242,13 +2311,24 @@ var Online = (function () {
   /* -- messages from the other player -- */
 
   function onHello(msg){
-    session.peerName = cleanName(msg.name) || 'Friend';
+    var s = session;
+    s.peerName = cleanName(msg.name) || 'Friend';
     if (msg.v !== PROTOCOL) {
-      say(session.peerName + ' has a different version of the game. Both of you: reload the page.');
+      say(s.peerName + ' has a different version of the game. Both of you: reload the page.');
       return;
     }
-    say('Playing with ' + session.peerName + '.');
+    say(s.peerAway ? s.peerName + ' is back!'
+      : s.peerKnown ? 'Reconnected. Playing with ' + s.peerName + '.'
+      : 'Playing with ' + s.peerName + '.');
+    s.peerKnown = true;
+    s.peerAway = null;
     if (game) sendGame();
+    refresh();
+  }
+
+  function onBye(){
+    session.peerAway = 'left';
+    say(peer() + ' left the game. Tap Leave when you are done, or wait: they can rejoin with the same code.');
     refresh();
   }
 
@@ -2273,7 +2353,7 @@ var Online = (function () {
       }
       var theyAreAhead = startsWith(msg.moves, game.moves);
       if (!theyAreAhead) {
-        if (!startsWith(game.moves, msg.moves)) say("Your boards don't match. Tap Rematch to start fresh.");
+        if (!startsWith(game.moves, msg.moves)) say("Your boards don't match. Tap New game to start fresh.");
         return;   // otherwise they're behind us and will catch up from our copy
       }
       if (msg.moves.length === game.moves.length && (game.resigned || !resigned)) return;  // nothing new
@@ -2311,19 +2391,29 @@ var Online = (function () {
     refresh();
   }
 
-  function onRematch(){
-    if (!game) return;
-    session.rematch.peer = true;
-    if (session.rematch.me) startRematch();
-    else say(peer() + ' wants a rematch! Tap Rematch to play again.');
+  function onNewGame(msg){
+    var s = session;
+    if (!game || MODES.indexOf(msg.mode) < 0) return;
+    s.nextGame.peer = msg.mode;
+    if (s.nextGame.me) {
+      startNewGame();
+    } else {
+      ui.nextMode.value = msg.mode;
+      say(peer() + ' wants a new game of ' + msg.mode + '! Tap New game to play.');
+    }
   }
 
-  // Both players asked: same game type, colors swap
-  function startRematch(){
-    session.rematch = { me: false, peer: false };
-    game = { mode: game.mode, myColor: opposite(game.myColor), moves: [], resigned: null };
-    resetBoard(game.mode);
-    say('New game! You are ' + game.myColor + '.');
+  // Both players asked. Colors swap every game. If both asked at the same
+  // moment for different games, both sides pick the same one by comparing
+  // their random tags.
+  function startNewGame(){
+    var s = session;
+    var mine = s.nextGame.me, theirs = s.nextGame.peer;
+    var mode = mine === theirs || s.tag < s.peerTag ? mine : theirs;
+    s.nextGame = { me: null, peer: null };
+    game = { mode: mode, myColor: opposite(game.myColor), moves: [], resigned: null };
+    resetBoard(mode);
+    say('New game of ' + mode + '! You are ' + game.myColor + '.');
   }
 
   /* -- buttons -- */
@@ -2334,13 +2424,13 @@ var Online = (function () {
       say('Online play needs a modern browser and a secure (https) page.');
       return;
     }
-    var code = SecretCode.normalize(ui.code.value);
+    var code = readCode();
     if (!code && role === 'create') code = SecretCode.generate();
-    if (!SecretCode.isLongEnough(code)) {
-      say('A secret code needs at least ' + SecretCode.MIN_LETTERS + ' letters. Tap 🎲 for a strong one.');
+    if (!SecretCode.isStrongEnough(code)) {
+      say('Fill in all four words (at least ' + SecretCode.MIN_LETTERS + ' letters in total), or tap 🎲.');
       return;
     }
-    ui.code.value = code;
+    fillCode(code);
     busy = true;
     say('Preparing the secret code…');
     var keys;
@@ -2356,10 +2446,12 @@ var Online = (function () {
     session = {
       code: code, roomId: keys.roomId, key: keys.key,
       name: cleanName(ui.name.value) || 'Player',
-      tag: toHex(crypto.getRandomValues(new Uint8Array(8))),   // tells our messages from theirs
+      tag: toHex(crypto.getRandomValues(new Uint8Array(8))),    // tells our messages from theirs
+      seat: toHex(crypto.getRandomValues(new Uint8Array(16))),  // our seat at the relay (see connect)
       seq: 0, peerTag: null, peerSeq: 0, peerName: 'your friend',
+      peerKnown: false, peerAway: null,   // peerAway: null, 'dropped' or 'left'
       paired: false, socket: null, pinger: null, lastHeard: 0, retries: 0,
-      rematch: { me: false, peer: false },
+      nextGame: { me: null, peer: null },   // which game each player asked for next
       inbox: Promise.resolve(), outbox: Promise.resolve()
     };
     lockSettings(true);
@@ -2380,10 +2472,11 @@ var Online = (function () {
   function leave(){
     if (!session) return;
     var s = session;
+    send({ t: 'bye' });   // so they see "left the game", not "connection dropped"
     session = null;
     game = null;
     clearInterval(s.pinger);
-    if (s.socket) s.socket.close(1000, 'bye');
+    s.outbox.then(function () { if (s.socket) s.socket.close(1000, 'bye'); });
     ui.setup.hidden = false;
     ui.session.hidden = true;
     ui.reconnect.hidden = true;
@@ -2399,12 +2492,15 @@ var Online = (function () {
     refresh();
   }
 
-  function rematch(){
-    if (!session || !session.paired || !game) return;
-    session.rematch.me = true;
-    send({ t: 'rematch' });
-    if (session.rematch.peer) startRematch();
-    else say('Rematch asked. Waiting for ' + peer() + '…');
+  // Asks for (or accepts) a new game in the same room. Accepting takes the
+  // game type the other player asked for.
+  function newGame(){
+    var s = session;
+    if (!s || !s.paired || !game) return;
+    s.nextGame.me = s.nextGame.peer || ui.nextMode.value;
+    send({ t: 'newgame', mode: s.nextGame.me });
+    if (s.nextGame.peer) startNewGame();
+    else say('Asked ' + peer() + ' for a new game of ' + s.nextGame.me + '…');
   }
 
   // The invite puts the code after "#", a part of the link browsers never
@@ -2427,11 +2523,11 @@ var Online = (function () {
     var match = location.hash.match(/^#join=(.+)$/);
     if (!match || session) return;
     history.replaceState(null, '', location.href.split('#')[0]);
-    try { ui.code.value = SecretCode.normalize(decodeURIComponent(match[1])); } catch (e) { return; }
+    try { fillCode(decodeURIComponent(match[1])); } catch (e) { return; }
     opponentSelect.value = 'online';
     opponentMode = 'online';
     updateColorSelectorVisibility();
-    ui.panel.hidden = false;
+    show(true);
     say("You've been invited! Type your name, then tap Join game.");
   }
   window.addEventListener('hashchange', readInvite);   // invite opened in a tab already showing the game
@@ -2452,11 +2548,16 @@ var Online = (function () {
     else connect();
   });
 
-  byId('onlineDice').addEventListener('click', function () { ui.code.value = SecretCode.generate(); });
+  function show(visible){
+    ui.panel.hidden = !visible;
+    ui.note.hidden = !visible;
+  }
+
+  byId('onlineDice').addEventListener('click', function () { fillCode(SecretCode.generate()); });
   byId('onlineCreate').addEventListener('click', function () { begin('create'); });
   byId('onlineJoin').addEventListener('click', function () { begin('join'); });
   byId('onlineShare').addEventListener('click', share);
-  byId('onlineRematch').addEventListener('click', rematch);
+  byId('onlineNewGame').addEventListener('click', newGame);
   byId('onlineResign').addEventListener('click', resign);
   byId('onlineReconnect').addEventListener('click', function () {
     if (session) { session.retries = 0; connect(); }
@@ -2465,7 +2566,7 @@ var Online = (function () {
   byId('onlineRelay').textContent = RELAY_URL.replace(/^wss:\/\//, '');
 
   return {
-    show: function (visible) { ui.panel.hidden = !visible; },
+    show: show,
     readInvite: readInvite,
     myColor: function () { return game ? game.myColor : playerColor; },
     peerName: peer,
@@ -2482,7 +2583,9 @@ var Online = (function () {
     turnText: function (color) {
       if (!session) return 'Create or join an online game above';
       if (!game) return 'Waiting for the game to start…';
-      if (!session.paired) return 'Waiting for ' + peer() + ' to connect…';
+      if (!session.paired) {
+        return session.peerKnown ? 'Waiting for ' + peer() + ' to come back…' : 'Waiting for your friend to join…';
+      }
       var name = color === 'white' ? 'White' : 'Black';
       return color === game.myColor ? 'Your turn (' + name + ')' : peer() + "'s turn (" + name + ')';
     },

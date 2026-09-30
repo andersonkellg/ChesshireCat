@@ -9,9 +9,15 @@ app from the browser's *Add to Home Screen*).
 ## Playing online with a friend
 
 1. Choose **Opponent → Online friend**, pick the game and your color.
-2. Tap 🎲 for a secret code, then **Create game**.
+2. Tap 🎲 for a four-word secret code, then **Create game**.
 3. Tap **Share invite** and send it to your friend (Messages, email, anything).
-4. Your friend opens the link, or types the code, and taps **Join game**.
+4. Your friend opens the link, or types the four words into the four boxes, and
+   taps **Join game**.
+5. When a game ends, pick **Chess** or **Checkers** and tap **New game**. Once
+   your friend taps it too, a new game starts in the same room, with colors
+   swapped.
+
+If a screen goes to sleep, the game waits and picks up where it left off.
 
 Moves are encrypted on your device with the secret code. The relay in the
 middle only passes scrambled messages along and keeps nothing. The details,
