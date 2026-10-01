@@ -18,9 +18,11 @@
  *   relay   -> browser  {"relay":"peer-left"}        the other player disconnected
  *   browser -> relay    "ping", answered "pong"      keep-alive
  */
+// Cloudflare's building block for a "room": a tiny program that exists
+// once per room ID, so both players' connections meet in the same place
 import { DurableObject } from 'cloudflare:workers';
 
-const SEATS = 2;
+const SEATS = 2;                       // players per room
 const MAX_MESSAGE_CHARS = 64 * 1024;
 const MAX_MESSAGES_PER_MINUTE = 120;
 // Browsers ping every 20 s. A seat silent for a minute belongs to someone who
@@ -33,6 +35,9 @@ const SEAT = /^[0-9a-f]{32}$/;
 // relay notes.
 const SEALED = /^[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+$/;
 
+// The front door: every connection attempt arrives here first. It checks
+// the request is a proper room connection from an allowed page (and not
+// too many tries from one place), then hands it to that room.
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -58,6 +63,7 @@ export default {
       if (!success) return new Response('Too many tries. Wait a minute.\n', { status: 429 });
     }
 
+    // Pass the connection to the Room for this room ID (created on first use)
     return env.ROOMS.get(env.ROOMS.idFromName(room[1])).fetch(request);
   },
 };
@@ -78,6 +84,9 @@ export class Room extends DurableObject {
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
 
+  // A player arrives: free any ghost seats, turn them away if both seats
+  // are taken (code 4001), otherwise seat them and tell everyone in the
+  // room whether they're waiting or paired
   async fetch(request) {
     const [client, server] = Object.values(new WebSocketPair());
     const seat = new URL(request.url).searchParams.get('seat');
@@ -101,6 +110,8 @@ export class Room extends DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  // A player sent something: if it looks encrypted and they aren't
+  // flooding, pass it to the other player unchanged; otherwise disconnect them
   webSocketMessage(ws, message) {
     if (typeof message !== 'string' || message.length > MAX_MESSAGE_CHARS || !SEALED.test(message)) {
       ws.close(4003, 'not-encrypted');
@@ -115,14 +126,18 @@ export class Room extends DurableObject {
     }
   }
 
+  // A player's connection closed, or broke
   webSocketClose(ws) {
     this.leave(ws);
   }
 
+  // A connection broke with an error: treated the same as a close
   webSocketError(ws) {
     this.leave(ws);
   }
 
+  // Tidies up after a player leaves and tells the other player, unless that
+  // seat had already been given to someone else (a ghost)
   leave(ws) {
     const ghost = (ws.deserializeAttachment() || {}).ghost;
     try {
@@ -136,6 +151,7 @@ export class Room extends DurableObject {
     }
   }
 
+  // The players currently connected to this room
   players() {
     return this.ctx.getWebSockets().filter((ws) => ws.readyState === WebSocket.OPEN);
   }

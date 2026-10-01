@@ -1,47 +1,113 @@
 <!DOCTYPE html>
+<!--
+  ====================================================================
+  CHESSHIRE CAT: chess and checkers in one web page
+  ====================================================================
+  This one file IS the whole game. There's no server program, no
+  downloaded libraries and no build step: your browser reads this file
+  from top to bottom and runs it. It has three parts:
+
+    1. <head>    Instructions for the browser (title, phone behaviour,
+                 the security policy) and every STYLE: colours, sizes
+                 and layout, written in a language called CSS.
+    2. <body>    The PAGE ITSELF: the menus, buttons and boards you
+                 see, written in HTML.
+    3. <script>  The BRAINS, written in JavaScript. In order:
+                   CHESS ENGINE ........... the rules of chess
+                   GLOBAL UI STATE ........ the menus and shared helpers
+                   CHESS SECTION .......... drawing the chess board, taps
+                   COMPUTER PLAYER ........ how "Chessckers" picks moves
+                   CHECKERS SECTION ....... rules, board and computer player
+                   ONLINE PLAY ............ playing a friend over the internet
+                   GLOBAL INITIALIZATION .. what happens when the page opens
+
+  Tips for reading this if you're not a programmer:
+    - A COMMENT is a note for people that the browser skips. This note
+      is one. Others start with /* and end with */, or start with //
+      and run to the end of the line.
+    - "function doSomething(...) { ... }" is a named list of steps the
+      page can run whenever it needs to.
+    - "var score = 0;" makes a named box ("variable") holding a value.
+    - "if (...) { ... } else { ... }" does one thing or the other.
+    - "for (...) { ... }" repeats the steps inside, e.g. once per square.
+
+  Other files: sw.js (lets the game work offline), manifest.webmanifest
+  (lets it be installed as an app), relay/ (the tiny online-play
+  server), PRIVACY.md (what online play can and can't see).
+-->
 <html lang="en">
 <head>
+<!-- Text is stored as UTF-8, which is how the ♔ ♛ ⚪ symbols can appear -->
 <meta charset="UTF-8">
+<!-- The name shown on the browser tab -->
 <title>Chesshire Cat</title>
+<!-- Phones: use the real screen width instead of pretending to be a
+     desktop, and let the page reach under the iPhone's notch and status
+     bar (the "safe area" padding further down keeps content clear of it) -->
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <!-- Security policy: this page may only load its own files, and the only
      network connection it may open is to the online-play relay. If you run
      your own relay, change the address here AND RELAY_URL in the script. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src wss://chesshirecat-relay.infidien.workers.dev; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<!-- The little picture on the browser tab, and on an iPhone home screen -->
 <link rel="icon" type="image/png" href="ChesshireCat.png">
 <link rel="apple-touch-icon" sizes="180x180" href="ChesshireCat.png">
+<!-- iPhone/iPad: when added to the home screen, open full-screen like an
+     app, with a see-through status bar, under the name "Chesshire Cat" -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Chesshire Cat">
+<!-- The colour some phones paint their top bar while the game is open -->
 <meta name="theme-color" content="#1a1a2e">
 
-<!-- PWA manifest (for Android/desktop). Optional but recommended if you add manifest.webmanifest -->
+<!-- App details for installing on Android and desktop (see manifest.webmanifest) -->
 <link rel="manifest" href="manifest.webmanifest">
 <style>
+/* ====================================================================
+   STYLES (CSS)
+   Each block below starts with WHICH parts of the page it applies to
+   (for example "header button" = buttons inside the header) and then,
+   between { and }, HOW they should look. Colours are written as codes
+   like #1a1a2e (dark navy) or rgba(r,g,b,opacity) for see-through ones.
+   Sizes: px = screen pixels, rem = the normal text size (about 16px),
+   em = the text size of the thing itself, % = a share of the space.
+   ==================================================================== */
+
 /* ---------- Layout ---------- */
+/* Sizes shared by both boards, worked out once here. "min(360px, ...)"
+   means: 360 pixels wide, unless the screen is too narrow for that, in
+   which case the screen width minus 96 pixels (room for the labels,
+   the board's frame and the page edges). */
 :root{
   /* The board shrinks to fit narrow screens (phones) */
   --board: min(360px, calc(100vw - 96px));
-  --square: calc(var(--board) / 8);
-  --piece: calc(var(--square) * 0.71);
+  --square: calc(var(--board) / 8);          /* 8 squares across */
+  --piece: calc(var(--square) * 0.71);       /* pieces fill ~71% of a square */
 }
+/* The whole page: dark background, no gaps round the edge, and no
+   page-level scrolling (the board area scrolls by itself if needed) */
 body{
   font-family:Arial,sans-serif;
   background:#1a1a2e;
   margin:0;padding:0;
   overflow:hidden;
 }
+/* Everything is stacked top to bottom and fills the screen's height:
+   header, online panel, board area, footer note */
 #app{display:flex;flex-direction:column;height:100vh;}
+/* The top bar with the logo and the menus */
 header{
   background:linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
   color:#fff;padding:0.6rem 1rem;
   /* On iPhone home-screen apps the page runs under the clock/battery bar;
      the safe-area inset is that bar's height, so nothing sits beneath it. */
   padding-top:calc(0.6rem + env(safe-area-inset-top));
+  /* items sit in a row and wrap onto a new line when they run out of room */
   display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;
   border-bottom: 1px solid #0f3460;
   box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
+/* The drop-down menus and the skill slider in the top bar */
 header select, header input[type="range"]{
   margin-left:0.3rem;
   background:#0f3460;
@@ -50,6 +116,7 @@ header select, header input[type="range"]{
   border-radius:4px;
   padding:0.3rem 0.5rem;
 }
+/* The pink buttons (New Game, Create game, ...) */
 header button, .online-panel button{
   background: linear-gradient(135deg, #e94560 0%, #c73659 100%);
   color:#fff;
@@ -58,55 +125,73 @@ header button, .online-panel button{
   padding:0.4rem 1rem;
   cursor:pointer;
   font-weight:bold;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s;   /* animate the hover effect */
 }
+/* With a mouse: a button lifts slightly and glows when pointed at */
 header button:hover, .online-panel button:hover{
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(233,69,96,0.4);
 }
+/* Menu labels ("Mode:", "Opponent:", ...) are a softer grey */
 header label{color:#a2a2c2;font-size:0.9rem;}
+/* The word after "Skill:" (Easy, Hard, ...) is highlighted in pink */
 #skillLabel{color:#e94560;font-weight:bold;}
 #logo{width:120px;height:120px;border-radius:6px;}
 /* A label and its control stay together when the header wraps */
 .field{display:inline-flex;align-items:center;gap:0.3rem;white-space:nowrap;}
+/* "hidden" settings (e.g. Skill in 2-player mode) take up no space */
 .field[hidden]{display:none;}
+/* The middle of the page, where the board sits. It takes all the height
+   left over ("flex:1") and centres the board inside it. */
 main{flex:1;display:flex;justify-content:center;align-items:center;
   background:radial-gradient(ellipse at center, #16213e 0%, #1a1a2e 100%);
   overflow:auto;
 }
+/* There are two "tabs" (the chess one and the checkers one) but only the
+   one marked "active" is shown */
 .tab{display:none;flex-direction:column;align-items:center;width:100%;height:100%;overflow:auto;padding:1rem;box-sizing:border-box;}
 .tab.active{display:flex;}
+/* The dark blue frame around a board */
 .board-container{
   background: #0f3460;
   padding: 12px;
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
 }
+/* Checkers: squares a selected piece can move to glow pink. ("!important"
+   lets this colour win over the square's normal light/dark colour.) */
 .highlight{background:rgba(233,69,96,0.5)!important;cursor:pointer;}
+/* Checkers: pieces that a jump would capture glow orange and show an
+   arrow in the direction of that hop */
 .jump-path{background:rgba(255,165,0,0.4)!important;position:relative;}
 .jump-path::after{
   content:'↗';
-  position:absolute;
+  position:absolute;              /* float the arrow over the square... */
   top:50%;
   left:50%;
-  transform:translate(-50%,-50%);
+  transform:translate(-50%,-50%); /* ...exactly in its centre */
   font-size:24px;
   color:rgba(255,255,255,0.8);
-  pointer-events:none;
+  pointer-events:none;            /* taps go through the arrow to the square */
 }
+/* Which arrow to show: up-left, up-right, down-left, down-right */
 .jump-path.jump-ul::after{content:'↖';}
 .jump-path.jump-ur::after{content:'↗';}
 .jump-path.jump-dl::after{content:'↙';}
 .jump-path.jump-dr::after{content:'↘';}
+/* Checkers: the little 👑 on a king, tucked into its top-right corner */
 .crown{position:absolute;top:-4px;right:-6px;font-size:0.5em;line-height:1;pointer-events:none;}
 
 /* ---------- Chessboard ---------- */
+/* A 2-by-2 grid: rank numbers (1-8) on the left, the board to their
+   right, and file letters (a-h) underneath */
 .board-wrapper{
   display:grid;
   grid-template-columns:30px var(--board);
   grid-template-rows:var(--board) 30px;
   gap:4px;
 }
+/* The chess board itself: an 8 by 8 grid of equal squares */
 .chessboard{
   display:grid;
   grid-template-columns:repeat(8,1fr);
@@ -117,6 +202,7 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
   grid-column:2;
   grid-row:1;
 }
+/* The column of rank numbers down the left side */
 .board-ranks{
   grid-column:1;
   grid-row:1;
@@ -128,6 +214,7 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
   font-size:14px;
   font-weight:bold;
 }
+/* The row of file letters along the bottom */
 .board-files{
   grid-column:2;
   grid-row:2;
@@ -138,28 +225,34 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
   font-size:14px;
   font-weight:bold;
 }
+/* One chess square: a fixed size, with its piece centred inside */
 .chessboard .square{
   width:var(--square);height:var(--square);
   display:flex;align-items:center;justify-content:center;
+  /* fonts that include the chess symbols, in order of preference */
   font-family: "Segoe UI Symbol","Noto Sans Symbols","Apple Color Emoji","Segoe UI Emoji",system-ui,sans-serif;
   cursor:pointer;
-  transition: background 0.15s;
-  user-select:none;
+  transition: background 0.15s;   /* colour changes fade in quickly */
+  user-select:none;               /* tapping doesn't select the symbol as text */
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
   text-rendering:optimizeLegibility;
   overflow:hidden;
   position:relative;
 }
+/* The classic light and dark wooden square colours */
 .chessboard .white-sq{background:#f0d9b5;}
 .chessboard .black-sq{background:#b58863;}
+/* The piece you tapped glows pink; the squares it may go to glow green */
 .chessboard .square.selected{background:rgba(233,69,96,0.6)!important;}
 .chessboard .square.legal-move{background:rgba(100,200,100,0.5)!important;}
+/* A yellow outline marks where the last move came from and went to */
 .chessboard .square.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 .chessboard .piece{
   font-size:var(--piece);
   line-height:1;
 }
+/* A piece grows slightly while it's being pressed */
 .chessboard .piece:active{transform:scale(1.1);}
 
 /* Playing black: the board turns around so your pieces are at the bottom.
@@ -171,7 +264,8 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
 .flipped .board-files{flex-direction:row-reverse;}
 .chessboard .piece.dragging{opacity:0.5;}
 
-/* Move notation display */
+/* Move notation display: the line under the chess board, e.g.
+   "Last move: Pawn E2 to E4" */
 .move-notation{
   margin-top:0.5rem;
   padding:0.4rem 0.8rem;
@@ -185,7 +279,14 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
 }
 
 /* ---------- Checkers ---------- */
+/* The checkers board is an HTML table: 8 rows of 8 cells. "fixed" layout
+   and "collapse" stop the browser resizing cells to fit their contents
+   or adding gaps between them. */
 table.checkers{border-collapse:collapse;border-radius:4px;overflow:hidden;table-layout:fixed;}
+/* One checkers square: exactly the same size as a chess square, with its
+   piece centred. (A table cell's height is normally only a minimum, so
+   the two lines marked below matter: they keep every square identical
+   whether it's empty, has a piece, or has a crowned king.) */
 table.checkers td{width:var(--square);height:var(--square);text-align:center;vertical-align:middle;font-size:var(--piece);
   padding:0;        /* no default cell padding, so a square is exactly --square */
   line-height:1;    /* keeps a piece's text line shorter than its square */
@@ -193,12 +294,15 @@ table.checkers td{width:var(--square);height:var(--square);text-align:center;ver
   overflow:hidden;
   position:relative;
 }
+/* A yellow outline marks the last move's start and end squares */
 table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
+/* Light and dark checkers squares (same colours as the chess board) */
 .light{background:#f0d9b5;}
 .dark{background:#b58863;}
+/* A checkers piece (⚪ or ⚫). "relative" lets the crown sit on top of it. */
 .piece{cursor:pointer;display:inline-block;line-height:1;position:relative;}
 
-/* Status display */
+/* Status display: the rounded box under the board, e.g. "Your turn (White)" */
 .status{
   margin-top:1rem;
   padding:0.6rem 1.2rem;
@@ -208,16 +312,19 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
   font-size:0.95rem;
   border: 1px solid #e94560;
 }
+/* When the game is over the box turns pink and gently pulses */
 .status.gameover{
   background: linear-gradient(135deg, #e94560 0%, #c73659 100%);
   animation: pulse 1.5s infinite;
 }
+/* The pulse: a glow that grows outwards and fades, over and over */
 @keyframes pulse{
   0%,100%{box-shadow:0 0 0 0 rgba(233,69,96,0.4);}
   50%{box-shadow:0 0 0 10px rgba(233,69,96,0);}
 }
 
 /* ---------- Online play ---------- */
+/* The panel under the header with the name, code boxes and buttons */
 .online-panel{
   background:#16213e;color:#e6e6f0;
   border-bottom:1px solid #0f3460;
@@ -225,22 +332,32 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
   display:flex;flex-direction:column;gap:0.5rem;
   font-size:0.9rem;
 }
+/* Parts marked "hidden" take up no space. (Needed because the rules
+   here give those parts a display style that would otherwise win.) */
 .online-panel[hidden], .online-panel [hidden]{display:none;}
+/* A row of controls that wraps onto the next line when it runs out of room */
 .online-row{display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;}
+/* Text boxes and menus in the online panel */
 .online-panel input, .online-panel select{
   background:#0f3460;color:#fff;
   border:1px solid #e94560;border-radius:4px;
   padding:0.4rem 0.5rem;font-size:1rem;   /* 16px+ keeps iOS from zooming in */
 }
 #onlineName{width:9rem;}
+/* The four secret-code word boxes share a row equally, with "-" between */
 .code-words{display:flex;align-items:center;gap:0.25rem;flex:1 1 18rem;min-width:0;}
 .code-words input{flex:1;width:0;min-width:0;padding:0.4rem 0.35rem;text-transform:lowercase;}
 .code-words span{color:#a2a2c2;}
+/* The secret code and relay address are shown in a typewriter-style font */
 .online-panel code, .online-note code{font-family:ui-monospace,Menlo,Consolas,monospace;}
+/* The "Chess/Checkers" picker and its New game button stay side by side */
 .online-next{display:inline-flex;gap:0.25rem;}
+/* Less important buttons (Share, Resign, Leave) are dark with a pink edge */
 .online-panel button.secondary{background:#0f3460;border:1px solid #e94560;}
 .online-panel button:disabled{opacity:0.5;cursor:default;transform:none;box-shadow:none;}
+/* The orange status line in the online panel ("Waiting for your friend…") */
 .online-state{color:#f39422;font-weight:bold;}
+/* The note at the very bottom about encryption and the relay */
 .online-note{
   padding:0.5rem 1rem;
   padding-bottom:calc(0.5rem + env(safe-area-inset-bottom));   /* clear the iPhone home bar */
@@ -249,9 +366,14 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 }
 .online-note[hidden]{display:none;}
 .online-note a{color:#a2a2c2;}
+/* The long relay address may break onto a second line, but only if it
+   can't fit on a line of its own */
 .online-note code{color:#e6e6f0;overflow-wrap:anywhere;}
 
 /* ---------- Phones ---------- */
+/* Everything inside "@media (max-width: 600px)" only applies on screens
+   600 pixels wide or less, i.e. phones. It replaces some of the rules
+   above with a layout that suits a narrow screen. */
 @media (max-width: 600px){
   /* Logo on the left, settings in two tidy columns beside it */
   header{
@@ -260,11 +382,14 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
     padding-top:calc(0.5rem + env(safe-area-inset-top));
   }
   #logo{width:56px;height:56px;grid-row:span 3;align-self:start;}
+  /* Each label sits above its menu */
   .field{flex-direction:column;align-items:stretch;gap:2px;min-width:0;}
   .field label{font-size:0.8rem;}
   header select, header input[type="range"]{margin-left:0;width:100%;min-width:0;box-sizing:border-box;}
+  /* The New Game button stretches across both settings columns */
   #newGame{grid-column:2 / -1;}
   .online-panel{padding:0.5rem 0.75rem;}
+  /* Your name, and then the four code words, each get a full-width row */
   #onlineName{flex:1 1 100%;width:auto;}
   .code-words{flex-basis:100%;}
 }
@@ -282,13 +407,24 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 </style>
 </head>
 <body>
+<!-- ====================================================================
+     THE PAGE (HTML)
+     Each <tag> below is one piece of the page. An id="..." is the
+     piece's unique name: the JavaScript further down finds things by
+     that name, e.g. document.getElementById('mode') is the Mode menu.
+     A class="..." is a style group from the CSS above. Pieces marked
+     "hidden" exist but aren't shown until the code reveals them.
+     ==================================================================== -->
 <div id="app">
+  <!-- The top bar: logo and the game settings -->
   <header>
-    <!-- LOGO -->
+    <!-- LOGO: the picture is stored right here in the file as text
+         ("base64"), so the game needs no separate image download -->
     <img id="logo"
          src="data:image/png;base64,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"
          alt="Logo">
 
+    <!-- Which game: chess or checkers -->
     <span class="field">
       <label for="mode">Mode:</label>
       <select id="mode">
@@ -296,6 +432,8 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
         <option value="checkers">Checkers</option>
       </select>
     </span>
+    <!-- Who you play: the computer ("Chessckers"), a second person on
+         this same screen, or a friend over the internet -->
     <span class="field">
       <label for="opponent">Opponent:</label>
       <select id="opponent">
@@ -304,6 +442,7 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
         <option value="online">Online friend</option>
       </select>
     </span>
+    <!-- Your colour (against the computer, or when creating an online game) -->
     <span class="field" id="colorField">
       <label for="playerColor">Play as:</label>
       <select id="playerColor">
@@ -311,6 +450,8 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
         <option value="black">Black</option>
       </select>
     </span>
+    <!-- How hard the computer tries: 1 (Very Easy) to 5 (Very Hard). This
+         is how many moves ahead it thinks; see "COMPUTER PLAYER" below. -->
     <span class="field" id="skillField">
       <label for="skill">Skill: <span id="skillLabel">Easy</span></label>
       <input type="range" id="skill" min="1" max="5" value="2">
@@ -324,24 +465,34 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
         <option value="turn">Turns each move</option>
       </select>
     </span>
+    <!-- Starts the current game over from the beginning -->
     <button id="newGame">New Game</button>
   </header>
 
-  <!-- ---------- Online play (shown only for "Online friend") ---------- -->
+  <!-- ---------- Online play (shown only for "Online friend") ----------
+       Two versions of the controls: "onlineSetup" before a game (name,
+       secret code, Create/Join) and "onlineSession" during one. -->
   <section id="onlinePanel" class="online-panel" hidden>
     <div id="onlineSetup" class="online-row">
+      <!-- Your name, as your friend will see it (20 characters at most) -->
       <input id="onlineName" maxlength="20" placeholder="Your name" autocomplete="off">
-      <!-- One box per word; spaces, dashes and capitals are handled for you -->
+      <!-- One box per word; spaces, dashes and capitals are handled for you.
+           The extra settings on each box tell phone keyboards not to
+           capitalise, autocorrect or spell-check, and to show a "next" key. -->
       <div id="onlineCode" class="code-words">
         <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="secret" aria-label="Secret code, word 1"><span>-</span>
         <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="code" aria-label="Secret code, word 2"><span>-</span>
         <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="four" aria-label="Secret code, word 3"><span>-</span>
         <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="words" aria-label="Secret code, word 4">
       </div>
+      <!-- 🎲 fills the boxes with four random words; Create starts a new
+           game with that code; Join enters a friend's game with their code -->
       <button id="onlineDice" class="secondary" title="Make a new random secret code">🎲</button>
       <button id="onlineCreate">Create game</button>
       <button id="onlineJoin">Join game</button>
     </div>
+    <!-- During a game: the code, plus buttons to invite, start a new game
+         (chess or checkers), resign, reconnect after a dropout, or leave -->
     <div id="onlineSession" class="online-row" hidden>
       <span>Secret code: <code id="onlineCodeShown"></code></span>
       <button id="onlineShare" class="secondary">Share invite</button>
@@ -356,13 +507,19 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
       <button id="onlineReconnect" hidden>Reconnect</button>
       <button id="onlineLeave" class="secondary">Leave</button>
     </div>
+    <!-- One line saying what's happening ("Waiting for your friend…").
+         role="status" makes screen readers announce it when it changes. -->
     <div id="onlineState" class="online-state" role="status">
       Tap 🎲 and Create a game, or type your friend's secret code and Join.
     </div>
   </section>
 
+  <!-- The middle of the page: one board at a time -->
   <main>
-    <!-- ---------- Chess tab ---------- -->
+    <!-- ---------- Chess tab ----------
+         The 64 squares aren't written here: the script draws them into
+         id="board" (see renderChessBoard). The numbers 8-1 and letters a-h
+         are the rank and file labels around the edge. -->
     <section id="chessTab" class="tab active">
       <div class="board-container">
         <div class="board-wrapper">
@@ -375,11 +532,15 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
           </div>
         </div>
       </div>
+      <!-- Whose turn it is / check / checkmate -->
       <div id="chessStatus" class="status">Your turn (White)</div>
+      <!-- A hint, or a description of the last move -->
       <div id="moveNotation" class="move-notation">Select a piece to move</div>
     </section>
 
-    <!-- ---------- Checkers tab ---------- -->
+    <!-- ---------- Checkers tab ----------
+         The script builds the board (an 8x8 table) inside id="checkersBoard";
+         see initCheckers. -->
     <section id="checkersTab" class="tab">
       <div class="board-container">
         <div id="checkersBoard"></div>
@@ -388,6 +549,8 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
     </section>
   </main>
 
+  <!-- Bottom note in online mode: what's protected, and which relay
+       (the only server this page may talk to) is being used -->
   <footer id="onlineNote" class="online-note" hidden>
     Moves are encrypted on this device with the secret code before they are sent.
     The relay only passes scrambled messages along and keeps nothing.
@@ -399,15 +562,44 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 <script>
 /* ==========================================================
    CHESS ENGINE (no optional chaining, Safari-friendly)
+   ----------------------------------------------------------
+   Everything about the RULES of chess lives in this "class"
+   (a bundle of data plus the functions that work on it). It knows
+   where every piece is, whose turn it is, which moves are legal,
+   and whether the game is over. It doesn't draw anything: the
+   CHESS SECTION further down asks it questions and draws the answers.
+
+   How the board is stored: a list of 64 slots, numbered 0 to 63,
+   reading like a book from Black's back row to White's:
+        index 0 = a8, 1 = b8, ... 7 = h8      (top row, Black's pieces)
+        index 8 = a7, ...
+        index 56 = a1, ... 63 = h1            (bottom row, White's pieces)
+   So "one row up the board" is -8, "one row down" is +8, and moving
+   one square left or right is -1 / +1. Each slot holds either nothing
+   (null) or a piece like { type: 'n', color: 'w' } (a white knight).
+
+   Piece letters: p pawn, n knight, b bishop, r rook, q queen, k king.
+   Colours: 'w' white, 'b' black.
+
+   "No optional chaining, Safari-friendly": the code avoids some newer
+   JavaScript shortcuts so it also runs on older iPhones and iPads.
    ========================================================== */
 class Chess {
+  // Sets up a new game. "fen" is an optional starting position written
+  // in FEN, the standard one-line text format for a chess position
+  // (explained in load() below). Without one, it's the normal start.
   constructor(fen) {
     this.SYMBOLS = 'pnbrqkPNBRQK';
+    // The normal starting position, in FEN
     this.DEFAULT_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    // Short names for the piece letters and colours, used throughout
     this.PAWN = 'p'; this.KNIGHT = 'n'; this.BISHOP = 'b';
     this.ROOK = 'r'; this.QUEEN = 'q'; this.KING = 'k';
     this.WHITE = 'w'; this.BLACK = 'b';
     
+    // A lookup table from a square's name to its slot number:
+    // SQUARES['a8'] = 0, SQUARES['e4'] = 36, SQUARES['h1'] = 63.
+    // i counts rows from the top (rank 8), j counts columns from a.
     this.SQUARES = {};
     var files = 'abcdefgh';
     for (var i = 0; i < 8; i++) {
@@ -416,22 +608,39 @@ class Chess {
       }
     }
     
-    this.board_array = new Array(64).fill(null);
-    this.turn_color = this.WHITE;
+    // The game's state (load() below fills these in from the FEN):
+    this.board_array = new Array(64).fill(null);   // the 64 squares, all empty for now
+    this.turn_color = this.WHITE;                  // whose move it is
+    // Castling still allowed? K/Q = White king-side/queen-side, k/q = Black.
+    // A right is lost for good once that king or rook has moved.
     this.castling = { K: true, Q: true, k: true, q: true };
+    // The square a pawn can be captured "en passant" on, if any (see _makeMove)
     this.ep_square = null;
+    // Moves since the last pawn move or capture (for the 50-move draw rule)
     this.half_moves = 0;
-    this.full_moves = 1;
-    this.history_stack = [];
+    this.full_moves = 1;          // the move number, counting up after Black moves
+    this.history_stack = [];      // past moves, so they can be taken back (undo)
     this.game_over_flag = false;
     
     this.load(fen || this.DEFAULT_FEN);
   }
 
+  // Sets the board from a FEN string. A FEN has six parts separated by
+  // spaces, for example the normal start:
+  //   rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+  //   1. the pieces, row by row from rank 8, rows separated by "/";
+  //      capital letters are White, small letters Black, and a digit
+  //      means that many empty squares
+  //   2. whose turn it is: w or b
+  //   3. castling rights still available (KQkq), or "-" for none
+  //   4. the en passant square, or "-"
+  //   5. moves since the last pawn move or capture
+  //   6. the move number
   load(fen) {
     var parts = fen.split(/\s+/);
     var rows = parts[0].split('/');
     
+    // Walk through part 1 letter by letter, filling slots 0 to 63 in order
     this.board_array = new Array(64).fill(null);
     var sq = 0;
     for (var r = 0; r < rows.length; r++) {
@@ -439,8 +648,9 @@ class Chess {
       for (var k = 0; k < row.length; k++) {
         var c = row[k];
         if (/\d/.test(c)) {
-          sq += parseInt(c,10);
+          sq += parseInt(c,10);          // a digit: skip that many empty squares
         } else {
+          // a letter: a piece. Capital = White, small = Black.
           var color = c === c.toUpperCase() ? this.WHITE : this.BLACK;
           this.board_array[sq] = { type: c.toLowerCase(), color: color };
           sq++;
@@ -448,6 +658,7 @@ class Chess {
       }
     }
     
+    // Parts 2 to 6: turn, castling rights, en passant square, counters
     this.turn_color = parts[1] || this.WHITE;
     this.castling = { K: false, Q: false, k: false, q: false };
     if (parts[2] && parts[2] !== '-') {
@@ -463,6 +674,7 @@ class Chess {
     this.game_over_flag = false;
   }
 
+  // The reverse of load(): describes the current position as a FEN string
   fen() {
     var fen = '';
     for (var r = 0; r < 8; r++) {
@@ -470,9 +682,9 @@ class Chess {
       for (var c = 0; c < 8; c++) {
         var p = this.board_array[r * 8 + c];
         if (!p) {
-          empty++;
+          empty++;                                  // count empty squares in a row...
         } else {
-          if (empty) { fen += empty; empty = 0; }
+          if (empty) { fen += empty; empty = 0; }   // ...and write them as one digit
           fen += p.color === this.WHITE ? p.type.toUpperCase() : p.type;
         }
       }
@@ -491,6 +703,9 @@ class Chess {
     return fen;
   }
 
+  // Converting between square names and slot numbers ('e4' <-> 36).
+  // (Names starting with "_" are the engine's own helpers, not meant to
+  // be used from outside the class.)
   _sq2idx(sq) { return this.SQUARES[sq]; }
   _idx2sq(idx) {
     var file = 'abcdefgh'[idx % 8];
@@ -498,6 +713,7 @@ class Chess {
     return file + rank;
   }
 
+  // The board as 8 rows of 8 squares (row 0 = rank 8), for drawing it
   board() {
     var result = [];
     for (var r = 0; r < 8; r++) {
@@ -509,37 +725,52 @@ class Chess {
     return result;
   }
 
+  // What's on a square, by name: get('e1') might be { type: 'k', color: 'w' }
   get(square) {
     var idx = this._sq2idx(square);
     return this.board_array[idx] || null;
   }
 
+  // Whose move it is: 'w' or 'b'
   turn() { return this.turn_color; }
 
+  // Lists every move the side to move could make by how the pieces move,
+  // WITHOUT yet checking whether it would leave their own king in check
+  // ("pseudo-legal"). moves() below removes those. Each move is written
+  // like { from: 'e2', to: 'e4' }, plus extra details where needed:
+  // promotion (which piece a pawn becomes), castling, captured.
+  // With onlyCaptures = true it lists only moves that take a piece.
   _generatePseudoLegalMoves(onlyCaptures) {
     if (typeof onlyCaptures === 'undefined') onlyCaptures = false;
     var moves = [];
     var color = this.turn_color;
     var enemy = color === this.WHITE ? this.BLACK : this.WHITE;
 
+    // Look at all 64 squares and work out moves for each of our pieces.
+    // r and c are the square's row (0 = rank 8) and column (0 = file a).
     for (var idx = 0; idx < 64; idx++) {
       var piece = this.board_array[idx];
-      if (!piece || piece.color !== color) continue;
+      if (!piece || piece.color !== color) continue;   // empty, or not ours
 
       var sq = this._idx2sq(idx);
       var r = Math.floor(idx / 8);
       var c = idx % 8;
 
+      // ---- Pawns: one step forward (two from their starting row),
+      // capture one step diagonally forward, and become a new piece on
+      // reaching the far side. White pawns move up the board (towards
+      // row 0, so -1), Black's move down (+1). ----
       if (piece.type === this.PAWN) {
         var dir = color === this.WHITE ? -1 : 1;
         var startRank = color === this.WHITE ? 6 : 1;
         var promoRank = color === this.WHITE ? 0 : 7;
 
-        // Forward
+        // Forward (only into an empty square; pawns can't capture straight ahead)
         if (!onlyCaptures) {
           var fwdIdx = idx + dir * 8;
           if (fwdIdx >= 0 && fwdIdx < 64 && !this.board_array[fwdIdx]) {
             if (Math.floor(fwdIdx / 8) === promoRank) {
+              // Reaching the last row: one move per piece it could become
               var promos = [this.QUEEN, this.ROOK, this.BISHOP, this.KNIGHT];
               for (var pi = 0; pi < promos.length; pi++) {
                 moves.push({ from: sq, to: this._idx2sq(fwdIdx), promotion: promos[pi] });
@@ -547,7 +778,8 @@ class Chess {
             } else {
               moves.push({ from: sq, to: this._idx2sq(fwdIdx) });
             }
-            // Double push
+            // Double push: two squares forward on a pawn's first move, if
+            // both squares are empty (the first was checked just above)
             if (r === startRank) {
               var dblIdx = idx + dir * 16;
               if (!this.board_array[dblIdx]) {
@@ -557,12 +789,15 @@ class Chess {
           }
         }
 
-        // Captures
+        // Captures: one square diagonally forward, to the left (-1) and right (+1).
+        // Allowed onto an enemy piece, or onto the en passant square: when an
+        // enemy pawn has just jumped two squares past ours, ours may take it
+        // as if it had moved only one.
         var pawnDirs = [-1,1];
         for (var pd = 0; pd < pawnDirs.length; pd++) {
           var dc = pawnDirs[pd];
           var nc = c + dc;
-          if (nc < 0 || nc > 7) continue;
+          if (nc < 0 || nc > 7) continue;      // that diagonal is off the board
           var capIdx = idx + dir * 8 + dc;
           if (capIdx < 0 || capIdx >= 64) continue;
           var target = this.board_array[capIdx];
@@ -587,12 +822,15 @@ class Chess {
         }
       }
 
+      // ---- Knights: the 8 "L-shaped" jumps (two one way, one the other).
+      // Each pair below is [rows to move, columns to move]. Knights jump
+      // over pieces, so only the landing square matters. ----
       if (piece.type === this.KNIGHT) {
         var knightD = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
         for (var nd = 0; nd < knightD.length; nd++) {
           var dr = knightD[nd][0], dc2 = knightD[nd][1];
           var nr = r + dr, nc2 = c + dc2;
-          if (nr < 0 || nr > 7 || nc2 < 0 || nc2 > 7) continue;
+          if (nr < 0 || nr > 7 || nc2 < 0 || nc2 > 7) continue;   // off the board
           var nidx = nr * 8 + nc2;
           var target2 = this.board_array[nidx];
           if (target2 && target2.color === color) continue;
@@ -605,12 +843,13 @@ class Chess {
         }
       }
 
+      // ---- King: one square in any of the 8 directions ----
       if (piece.type === this.KING) {
         var kingD = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
         for (var kd = 0; kd < kingD.length; kd++) {
           var kdr = kingD[kd][0], kdc = kingD[kd][1];
           var knr = r + kdr, knc = c + kdc;
-          if (knr < 0 || knr > 7 || knc < 0 || knc > 7) continue;
+          if (knr < 0 || knr > 7 || knc < 0 || knc > 7) continue;   // off the board
           var kidx = knr * 8 + knc;
           var ktarget = this.board_array[kidx];
           if (ktarget && ktarget.color === color) continue;
@@ -621,7 +860,15 @@ class Chess {
             captured: ktarget ? ktarget.type : undefined
           });
         }
-        // Castling
+        // Castling: the king moves two squares towards a rook, and that rook
+        // jumps to the square the king crossed. Allowed only if neither has
+        // moved yet (the castling rights), the squares between them are
+        // empty, and the king isn't in check, doesn't pass through a square
+        // under attack, and doesn't land on one.
+        //   White: K = king-side (e1 to g1), Q = queen-side (e1 to c1)
+        //   Black: k = king-side (e8 to g8), q = queen-side (e8 to c8)
+        // The numbers are slot numbers: 61 = f1, 62 = g1, 59 = d1, 58 = c1,
+        // 57 = b1; and 5 = f8, 6 = g8, 3 = d8, 2 = c8, 1 = b8.
         if (!onlyCaptures) {
           if (color === this.WHITE && sq === 'e1') {
             if (this.castling.K && !this.board_array[61] && !this.board_array[62]) {
@@ -650,7 +897,9 @@ class Chess {
         }
       }
 
-      // Bishop / Queen diagonals
+      // ---- Bishop / Queen diagonals: slide any distance diagonally,
+      // stopping at the first piece in the way (capturing it if it's an
+      // enemy). "step" walks outward one square at a time. ----
       if (piece.type === this.BISHOP || piece.type === this.QUEEN) {
         var diagD = [[-1,-1],[-1,1],[1,-1],[1,1]];
         for (var dd = 0; dd < diagD.length; dd++) {
@@ -671,7 +920,8 @@ class Chess {
         }
       }
 
-      // Rook / Queen straights
+      // ---- Rook / Queen straights: the same sliding, but up, down, left
+      // and right. (A queen gets both this and the diagonals.) ----
       if (piece.type === this.ROOK || piece.type === this.QUEEN) {
         var straightD = [[-1,0],[1,0],[0,-1],[0,1]];
         for (var sd = 0; sd < straightD.length; sd++) {
@@ -695,11 +945,16 @@ class Chess {
     return moves;
   }
 
+  // Is square "sq" attacked by any piece of colour "byColor"? Used to
+  // spot check and to make sure castling doesn't cross attacked squares.
+  // It works backwards: from the square, look outward the way each kind
+  // of piece moves, and see if such a piece of that colour is there.
   _isAttacked(sq, byColor) {
     var idx = this._sq2idx(sq);
     var r = Math.floor(idx / 8), c = idx % 8;
 
-    // Pawn attacks
+    // Pawn attacks: an attacking pawn sits one row "behind" the square
+    // (from its own point of view), one column to either side
     var pawnDir = byColor === this.WHITE ? 1 : -1;
     var pawnDC = [-1,1];
     for (var pd = 0; pd < pawnDC.length; pd++) {
@@ -733,7 +988,9 @@ class Chess {
       }
     }
 
-    // Diagonals
+    // Diagonals: the first piece met in each diagonal direction attacks
+    // the square if it's an enemy bishop or queen (anything further away
+    // is blocked by that first piece)
     var diagD = [[-1,-1],[-1,1],[1,-1],[1,1]];
     for (var dd = 0; dd < diagD.length; dd++) {
       var ddr = diagD[dd][0], ddc = diagD[dd][1];
@@ -748,7 +1005,7 @@ class Chess {
       }
     }
 
-    // Straights
+    // Straights: the same idea for rooks and queens along rows and columns
     var straightD = [[-1,0],[1,0],[0,-1],[0,1]];
     for (var sd = 0; sd < straightD.length; sd++) {
       var sdr = straightD[sd][0], sdc = straightD[sd][1];
@@ -766,6 +1023,7 @@ class Chess {
     return false;
   }
 
+  // Which square this colour's king is on (e.g. 'e1')
   _findKing(color) {
     for (var i = 0; i < 64; i++) {
       var p = this.board_array[i];
@@ -774,6 +1032,7 @@ class Chess {
     return null;
   }
 
+  // Is the side to move in check (its king attacked)?
   in_check() {
     var kingSq = this._findKing(this.turn_color);
     if (!kingSq) return false;
@@ -781,6 +1040,12 @@ class Chess {
     return this._isAttacked(kingSq, enemy);
   }
 
+  // The LEGAL moves for the side to move: the pseudo-legal ones, minus
+  // any that would leave their own king attacked. Each candidate move is
+  // tried on the board, checked, then taken back again.
+  //   moves()                     -> short codes like 'e2e4' (used by the computer)
+  //   moves({ square: 'e2' })     -> only moves of the piece on e2
+  //   moves({ verbose: true })    -> full details: from, to, promotion, ...
   moves(options) {
     options = options || {};
     var pseudo = this._generatePseudoLegalMoves();
@@ -791,8 +1056,11 @@ class Chess {
 
       if (options.square && m.from !== options.square) continue;
 
-      var undo = this._makeMove(m);
+      var undo = this._makeMove(m);   // try it...
 
+      // ...after the move it's the other side's turn, so "our" king is
+      // the one whose colour is NOT turn_color. Keep the move only if
+      // that king isn't attacked.
       var kingSq = this._findKing(this.turn_color === this.WHITE ? this.BLACK : this.WHITE);
       if (kingSq && !this._isAttacked(kingSq, this.turn_color)) {
         if (options.verbose) {
@@ -811,12 +1079,17 @@ class Chess {
         }
       }
 
-      this._undoMove(undo);
+      this._undoMove(undo);   // ...and put the board back
     }
 
     return legal;
   }
 
+  // Actually moves a piece on the board, including the special parts of
+  // castling, en passant and promotion, and updates whose turn it is.
+  // It returns an "undo" record: everything needed to put the board back
+  // exactly as it was (see _undoMove). It doesn't check legality; that's
+  // done by moves() and move().
   _makeMove(m) {
     var fromIdx = this._sq2idx(m.from);
     var toIdx = this._sq2idx(m.to);
@@ -841,7 +1114,9 @@ class Chess {
       castlingMove: m.castling
     };
 
-    // En passant capture
+    // En passant capture: the pawn being taken isn't on the square we
+    // land on but right behind it (one row back towards its own side),
+    // so remove it from there
     if (piece.type === this.PAWN && m.to === this.ep_square) {
       var epCapIdx = this.turn_color === this.WHITE ? toIdx + 8 : toIdx - 8;
       undo.epCaptured = this.board_array[epCapIdx] ? {
@@ -852,14 +1127,18 @@ class Chess {
       this.board_array[epCapIdx] = null;
     }
 
+    // The move itself: empty the starting square, put the piece on the
+    // target square (replacing whatever was there, i.e. capturing it)
     this.board_array[fromIdx] = null;
     this.board_array[toIdx] = piece;
 
+    // A pawn reaching the far side becomes the chosen piece
     if (m.promotion) {
       this.board_array[toIdx] = { type: m.promotion, color: piece.color };
     }
 
-    // Castling rook moves
+    // Castling: the king has moved above; now move the rook across it
+    // (63 = h1 to 61 = f1, 56 = a1 to 59 = d1, 7 = h8 to 5 = f8, 0 = a8 to 3 = d8)
     if (m.castling) {
       if (m.castling === 'K') {
         this.board_array[61] = this.board_array[63];
@@ -876,7 +1155,8 @@ class Chess {
       }
     }
 
-    // Update castling rights
+    // Update castling rights: moving the king loses both; moving a rook
+    // from its corner, or capturing a rook in its corner, loses that side
     if (piece.type === this.KING) {
       if (piece.color === this.WHITE) {
         this.castling.K = false;
@@ -891,14 +1171,17 @@ class Chess {
     if (m.from === 'a8' || m.to === 'a8') this.castling.q = false;
     if (m.from === 'h8' || m.to === 'h8') this.castling.k = false;
 
-    // En passant square
+    // En passant square: if a pawn just moved two squares (16 slots =
+    // two rows), the square it skipped over may be captured onto next
+    // turn. Any other move clears it.
     if (piece.type === this.PAWN && Math.abs(fromIdx - toIdx) === 16) {
       this.ep_square = this._idx2sq((fromIdx + toIdx) / 2);
     } else {
       this.ep_square = null;
     }
 
-    // Move counters
+    // Move counters: the 50-move counter resets on any pawn move or
+    // capture; the move number goes up after each Black move
     if (piece.type === this.PAWN || captured) {
       this.half_moves = 0;
     } else {
@@ -908,11 +1191,15 @@ class Chess {
       this.full_moves++;
     }
 
+    // Now it's the other side's turn
     this.turn_color = this.turn_color === this.WHITE ? this.BLACK : this.WHITE;
 
     return undo;
   }
 
+  // Takes back a move using the record _makeMove returned: puts the piece
+  // back, restores anything captured (including an en passant pawn),
+  // moves a castled rook home, and restores the rights and counters
   _undoMove(undo) {
     this.turn_color = this.turn_color === this.WHITE ? this.BLACK : this.WHITE;
 
@@ -956,6 +1243,10 @@ class Chess {
     this.full_moves = undo.full_moves;
   }
 
+  // Makes a move if it's legal, otherwise does nothing and returns null.
+  // Accepts either a short code like 'e7e8q' or { from, to, promotion }.
+  // On success it returns a summary of the move (from, to, piece,
+  // captured, promotion) that the rest of the page uses for display.
   move(moveInput) {
     var m;
     if (typeof moveInput === 'string') {
@@ -967,6 +1258,8 @@ class Chess {
       m = moveInput;
     }
 
+    // Find the matching move among the possible ones. If a pawn reaches
+    // the last row and no piece was named, it becomes a queen.
     var legalMoves = this._generatePseudoLegalMoves();
     var found = null;
 
@@ -987,6 +1280,7 @@ class Chess {
 
     var undo = this._makeMove(found);
 
+    // Not allowed to leave your own king in check: if it is, take it back
     var prevTurn = this.turn_color === this.WHITE ? this.BLACK : this.WHITE;
     var kingSq = this._findKing(prevTurn);
     if (kingSq && this._isAttacked(kingSq, this.turn_color)) {
@@ -994,7 +1288,7 @@ class Chess {
       return null;
     }
 
-    this.history_stack.push(undo);
+    this.history_stack.push(undo);   // remember it, so undo() can take it back
 
     return {
       from: found.from,
@@ -1006,6 +1300,7 @@ class Chess {
     };
   }
 
+  // Takes back the most recent move (the computer uses this while thinking)
   undo() {
     if (!this.history_stack.length) return null;
     var undo = this.history_stack.pop();
@@ -1013,19 +1308,27 @@ class Chess {
     return undo;
   }
 
+  // The game is over when the side to move has no legal moves
+  // (checkmate or stalemate), or it's a draw
   game_over() {
     if (this.moves().length === 0) return true;
     return this.in_draw();
   }
 
+  // Checkmate: in check, and no legal move gets out of it
   in_checkmate() {
     return this.in_check() && this.moves().length === 0;
   }
 
+  // Stalemate (a draw): NOT in check, but no legal move at all
   in_stalemate() {
     return !this.in_check() && this.moves().length === 0;
   }
 
+  // Draws: stalemate; the 50-move rule (50 moves each, i.e. 100 half-moves,
+  // with no pawn move or capture); or too few pieces left for anyone to
+  // force checkmate (kings only, or a king and one bishop or knight
+  // against a lone king)
   in_draw() {
     if (this.in_stalemate()) return true;
     if (this.half_moves >= 100) return true;
@@ -1047,7 +1350,14 @@ class Chess {
 
 /* ==========================================================
    GLOBAL UI STATE
+   ----------------------------------------------------------
+   "UI" = user interface: the menus and buttons. This part finds
+   them on the page, remembers the current settings, and reacts when
+   they change. It also has small helpers that both games use to
+   decide whose turn it is and what the status line should say.
    ========================================================== */
+// Find each control on the page by its id (see the HTML above) and keep
+// a handle on it, so the code can read and change it later
 var modeSelect     = document.getElementById('mode');
 var opponentSelect = document.getElementById('opponent');
 var playerColorSelect = document.getElementById('playerColor');
@@ -1059,19 +1369,25 @@ var skillSlider    = document.getElementById('skill');
 var skillLabel     = document.getElementById('skillLabel');
 var newGameBtn     = document.getElementById('newGame');
 
+// The current settings: who you're playing ('computer', 'human' for two
+// people on one screen, or 'online') and your colour ('white'/'black').
 // Default to "computer" if for some reason the element isn't found yet
 var opponentMode = opponentSelect ? opponentSelect.value : 'computer';
 var playerColor = playerColorSelect ? playerColorSelect.value : 'white';
 
+// Shows the skill level as a word next to the slider (slider 1-5)
 function setSkillLabel(v){
   var names = ['Very Easy','Easy','Medium','Hard','Very Hard'];
   skillLabel.textContent = names[v-1];
 }
 setSkillLabel(skillSlider.value);
+// "addEventListener" means: when this happens, run these steps. Here,
+// whenever the slider moves, update the word.
 skillSlider.addEventListener('input', function () {
   setSkillLabel(skillSlider.value);
 });
 
+// Shows only the settings that matter for the chosen opponent
 function updateColorSelectorVisibility(){
   // "Play as" matters against the computer and online; skill only vs. computer
   colorField.hidden = opponentMode === 'human';
@@ -1120,6 +1436,7 @@ function idlePrompt(){
   return 'Select a piece to move';
 }
 
+// Switches between the chess and checkers boards, and starts a new game
 function showTab(mode){
   // Hide all tabs
   var tabs = document.querySelectorAll('.tab');
@@ -1138,10 +1455,13 @@ function showTab(mode){
   initGame();
 }
 
+// When a menu changes, apply the new setting and start a fresh game:
+// the Mode menu (chess/checkers)...
 modeSelect.addEventListener('change', function () {
   showTab(modeSelect.value);
 });
 
+// ...the Opponent menu (also shows or hides the online panel)...
 // Only attach the listener if the element actually exists
 if (opponentSelect) {
   opponentSelect.addEventListener('change', function () {
@@ -1152,6 +1472,7 @@ if (opponentSelect) {
   });
 }
 
+// ...and the "Play as" colour menu
 if (playerColorSelect) {
   playerColorSelect.addEventListener('change', function () {
     playerColor = playerColorSelect ? playerColorSelect.value : 'white';
@@ -1165,14 +1486,22 @@ boardTurnSelect.addEventListener('change', updateBoardOrientation);
 
 /* ==========================================================
    CHESS SECTION – click-to-move UI
+   ----------------------------------------------------------
+   Draws the chess board on screen and handles taps: tap one of your
+   pieces to select it (its possible moves light up green), then tap
+   where it should go. The rules themselves come from the Chess
+   engine above; this part only asks it questions.
    ========================================================== */
-var chess;
-var selectedSquare = null;
-var legalMovesFromSelected = [];
-var lastMove = null;
+var chess;                        // the current game (a Chess engine, created in initChess)
+var selectedSquare = null;        // the square tapped first (e.g. 'e2'), or null
+var legalMovesFromSelected = [];  // where that piece may go (lit up green)
+var lastMove = null;              // the most recent move, outlined in yellow
 var chessStatus = document.getElementById('chessStatus');
 var moveNotation = document.getElementById('moveNotation');
 
+// The symbol to show for a piece. Chess symbols are ordinary text
+// characters (♔ ♕ ♖ ...), so no images are needed. Capital letters are
+// White's pieces (outlined symbols), small letters Black's (filled).
 function pieceUnicode(piece){
   var key = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
   var map = {
@@ -1182,6 +1511,7 @@ function pieceUnicode(piece){
   return map[key] || '';
 }
 
+// A piece's name in words, for messages like "Pawn E2 to E4"
 function getPieceName(piece) {
   var names = {
     'p': 'Pawn',
@@ -1194,12 +1524,14 @@ function getPieceName(piece) {
   return names[piece.type] || 'Piece';
 }
 
+// Puts a message on the line under the chess board
 function updateMoveNotation(text) {
   if (moveNotation) {
     moveNotation.textContent = text;
   }
 }
 
+// Words for the piece on a square, e.g. "White Knight G1"
 function describePieceAtSquare(square) {
   var piece = chess.get(square);
   if (!piece) return null;
@@ -1208,6 +1540,11 @@ function describePieceAtSquare(square) {
   return color + ' ' + pieceName + ' ' + square.toUpperCase();
 }
 
+// Words for a move that has just been played, e.g. "Pawn E2 to E4" or
+// "Knight F3 takes Bishop at E5". It looks at the piece now standing on
+// the destination square. (Note: the engine never fills in move.flags,
+// so castling is described as an ordinary king move, e.g. "King E1 to
+// G1", and an en passant capture as an ordinary pawn move.)
 function describeMove(move) {
   var piece = chess.get(move.to);
   if (!piece) return '';
@@ -1247,20 +1584,26 @@ function updateBoardOrientation(){
   document.getElementById('checkersTab').classList.toggle('flipped', flip);
 }
 
+// Draws the whole chess board from scratch: 64 squares, each with its
+// colour, its piece (if any) and any highlight. It's redrawn after every
+// tap and move; that's simpler than changing squares one by one, and
+// fast enough not to notice.
 function renderChessBoard(){
   updateBoardOrientation();
   var boardEl = document.getElementById('board');
-  boardEl.innerHTML = '';
+  boardEl.innerHTML = '';   // clear the old squares
   var board = chess.board();
   var files = 'abcdefgh';
 
   for (var r = 0; r < 8; r++) {
     for (var c = 0; c < 8; c++) {
+      // Make one square. Light and dark alternate, so a square is light
+      // when its row number plus column number is even.
       var sqDiv = document.createElement('div');
       var isLight = (r + c) % 2 === 0;
       sqDiv.className = 'square ' + (isLight ? 'white-sq' : 'black-sq');
-      var sq = files[c] + (8 - r);
-      sqDiv.dataset.square = sq;
+      var sq = files[c] + (8 - r);   // its name: row 0 is rank 8, so r=0,c=0 is 'a8'
+      sqDiv.dataset.square = sq;     // label the square with its name
 
       if (lastMove && (sq === lastMove.from || sq === lastMove.to)) {
         sqDiv.classList.add('last-move');
@@ -1285,6 +1628,10 @@ function renderChessBoard(){
         sqDiv.appendChild(span);
       }
 
+      // When this square is tapped, run handleChessSquareClick with its
+      // name. (The extra "function(squareName){...}(sq)" wrapper fixes
+      // each square's own name in place; without it every square would
+      // report the last square drawn.)
       (function(squareName){
         sqDiv.addEventListener('click', function(){
           handleChessSquareClick(squareName);
@@ -1296,6 +1643,9 @@ function renderChessBoard(){
   }
 }
 
+// What happens when a square is tapped. The first tap selects one of
+// your pieces; the second tap either moves it there (if that's one of its
+// legal moves), deselects it (tapping it again), or cancels (anywhere else).
 function handleChessSquareClick(sq){
   if (chess.game_over()) return;
 
@@ -1342,6 +1692,8 @@ function handleChessSquareClick(sq){
       return;
     }
 
+    // Make the move. (A pawn reaching the far side always becomes a queen
+    // here: it's the first promotion the engine lists for that square.)
     var moveObj = { from: targetMove.from, to: targetMove.to };
     if (targetMove.promotion) moveObj.promotion = targetMove.promotion;
     var move = chess.move(moveObj);
@@ -1362,14 +1714,18 @@ function handleChessSquareClick(sq){
     renderChessBoard();
     updateChessStatus();
 
+    // Online: send the move to your friend
     if (opponentMode === 'online') Online.localMove(move);
 
+    // Against the computer: let it reply after a short pause (0.2 seconds),
+    // so your own move appears on screen before it starts thinking
     if (!chess.game_over() && opponentMode === 'computer') {
       setTimeout(computeChessAI, 200);
     }
   }
 }
 
+// Starts a new chess game: a fresh engine, nothing selected, board redrawn
 function initChess(){
   chess = new Chess();
   selectedSquare = null;
@@ -1385,6 +1741,8 @@ function initChess(){
   }
 }
 
+// The computer's turn: work out its best move (see COMPUTER PLAYER below)
+// and play it. The Skill slider (1-5) sets how many moves ahead it looks.
 function computeChessAI(){
   if (opponentMode !== 'computer') return;
   if (chess.game_over()) return;
@@ -1408,6 +1766,7 @@ function computeChessAI(){
   updateChessStatus();
 }
 
+// If the game is over, the message to show; otherwise nothing (null)
 function chessEndText(turn){
   if (chess.in_checkmate()) return 'Checkmate! ' + (turn === 'white' ? 'Black' : 'White') + ' wins!';
   if (chess.in_stalemate()) return 'Stalemate! Draw.';
@@ -1415,6 +1774,7 @@ function chessEndText(turn){
   return resignedText();
 }
 
+// Updates the status line under the board: game over, check, or whose turn
 function updateChessStatus() {
   var turn = chess.turn() === 'w' ? 'white' : 'black';
   var ended = chessEndText(turn);
@@ -1428,19 +1788,39 @@ function updateChessStatus() {
   chessStatus.classList.toggle('gameover', !!ended);
 }
 
-/* ---- minimax (alpha-beta) for Chess ---- */
+/* ==========================================================
+   COMPUTER PLAYER ("Chessckers"): minimax (alpha-beta) for Chess
+   ----------------------------------------------------------
+   How the computer chooses a move:
+   1. It gives any position a SCORE (evaluateBoard below): positive is
+      good for White, negative is good for Black.
+   2. It tries each of its moves, then each possible reply, then each
+      reply to that, and so on, "depth" moves deep (the Skill level),
+      scoring the positions it ends up in.
+   3. It assumes both sides play their best: White picks the highest
+      score, Black the lowest. That back-and-forth is called MINIMAX.
+   4. ALPHA-BETA is a shortcut: once a line of play is known to be worse
+      than one already found, the rest of it isn't examined. Same answer,
+      much less work.
+   Each extra level of Skill makes it think roughly 20-30 times longer,
+   which is why Very Hard can pause noticeably.
+   ========================================================== */
+// The top level of the search: tries every move and returns the best one.
+// isMax is true when the computer is White (it wants the highest score).
 function minimaxRoot(depth, game, isMax){
   var moves = game.moves();
   if (!moves.length) return null;
   var bestMove = null;
   var bestVal = isMax ? -Infinity : Infinity;
   
-  // Shuffle moves for variety
+  // Shuffle moves for variety: when several moves score the same, the
+  // computer won't always pick the same one (a standard random shuffle)
   for (var i = moves.length - 1; i > 0; i--) {
     var j = Math.floor(Math.random() * (i + 1));
     var tmp = moves[i]; moves[i] = moves[j]; moves[j] = tmp;
   }
   
+  // Try each move on the real board, see how it scores, take it back
   for (var k = 0; k < moves.length; k++){
     var m = moves[k];
     game.move(m);
@@ -1455,7 +1835,13 @@ function minimaxRoot(depth, game, isMax){
   return bestMove;
 }
 
+// Scores a position by looking "depth" more moves ahead. The function
+// calls itself for each next move (a "recursive" function), with isMax
+// switching sides each time. alpha = the best score White is already sure
+// of, beta = the best Black is already sure of; when they cross
+// (beta <= alpha) the remaining moves can't matter, so it stops early.
 function minimax(depth, game, alpha, beta, isMax){
+  // Out of depth, or the game has ended: just score the board as it stands
   if (depth === 0 || game.game_over()){
     return evaluateBoard(game);
   }
@@ -1487,6 +1873,10 @@ function minimax(depth, game, alpha, beta, isMax){
   }
 }
 
+// The score of a position (positive = good for White). Mostly it counts
+// material: each piece's value below, added for White and subtracted for
+// Black. A pawn is worth 100 points, a queen 900; the king's huge value
+// just makes sure losing it outweighs everything else.
 function evaluateBoard(game){
   var pieceVals = {p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000};
   var board = game.board();
@@ -1497,9 +1887,13 @@ function evaluateBoard(game){
       var p = board[r][c];
       if (!p) continue;
       var val = pieceVals[p.type];
+      // Small bonuses for good placement:
+      // pawns are worth 10 more for each row they've advanced...
       if (p.type === 'p') {
         val += (p.color === 'w' ? (6 - r) : (r - 1)) * 10;
       }
+      // ...and knights and bishops are worth more near the centre,
+      // where they control more squares
       if (p.type === 'n' || p.type === 'b') {
         var centerDist = Math.abs(3.5 - r) + Math.abs(3.5 - c);
         val += (7 - centerDist) * 5;
@@ -1508,6 +1902,7 @@ function evaluateBoard(game){
     }
   }
   
+  // Checkmate beats everything: hugely bad for whoever is checkmated
   if (game.in_checkmate()) {
     total += game.turn() === 'w' ? -100000 : 100000;
   }
@@ -1517,16 +1912,34 @@ function evaluateBoard(game){
 
 /* ==========================================================
    CHECKERS SECTION
+   ----------------------------------------------------------
+   Rules, drawing and computer player for checkers (American rules:
+   pieces move diagonally forward on the dark squares; capturing is
+   compulsory; several jumps in a row are allowed; reaching the far
+   side makes a piece a king, which moves one square in any diagonal
+   direction).
+
+   How the board is stored: 8 rows of 8 numbers. Row 0 is the top
+   (Black's side), row 7 the bottom (White's side). Each number means:
+        0  empty
+        1  white piece      2  white king
+       -1  black piece     -2  black king
+   So the sign (+ or -) says whose it is, and the size (1 or 2) says
+   whether it's a king. Whose turn it is uses the same signs:
+   1 = White, -1 = Black, which is why "turn *= -1" (multiply by
+   minus one) switches turns.
    ========================================================== */
 var CHECKERS = {
   size: 8,
-  board: [],
-  turn: 1,
-  selected: null,
-  lastMove: null
+  board: [],        // the 8x8 numbers described above
+  turn: 1,          // 1 = White to move, -1 = Black
+  selected: null,   // the piece tapped first, as {r: row, c: column}
+  lastMove: null    // the last move, outlined in yellow: {from: {r,c}, to: {r,c}}
 };
 var checkersStatus = document.getElementById('checkersStatus');
 
+// Builds the checkers board on the page (a table of 8 rows of 8 cells)
+// and starts a new game
 function initCheckers(){
   var container = document.getElementById('checkersBoard');
   container.innerHTML = '';
@@ -1536,6 +1949,9 @@ function initCheckers(){
     var tr = document.createElement('tr');
     for (var c = 0; c < 8; c++){
       var td = document.createElement('td');
+      // Squares alternate light and dark; only the dark ones are played
+      // on, so only those get labelled with their row/column and respond
+      // to taps
       td.className = (r + c) % 2 === 1 ? 'dark' : 'light';
       if ((r + c) % 2 === 1){
         td.dataset.r = r;
@@ -1557,6 +1973,8 @@ function initCheckers(){
   }
 }
 
+// Puts the pieces in their starting places: Black on the dark squares of
+// the top three rows, White on the dark squares of the bottom three
 function resetCheckersState(){
   var s = [];
   for (var r = 0; r < 8; r++){
@@ -1571,6 +1989,8 @@ function resetCheckersState(){
   CHECKERS.lastMove = null;
 }
 
+// Draws the pieces onto the board: ⚪ for White, ⚫ for Black, with a 👑
+// on kings, and a yellow outline on the last move's two squares
 function renderCheckers(){
   updateBoardOrientation();
   var tbl = document.querySelector('table.checkers');
@@ -1619,6 +2039,7 @@ function checkersGameOverInfo(){
   return { over: false, message: null };
 }
 
+// Updates the status line under the board: game over, or whose turn
 function updateCheckersStatus() {
   var info = checkersGameOverInfo();
   var ended = info.over ? info.message : resignedText();
@@ -1626,15 +2047,20 @@ function updateCheckersStatus() {
   checkersStatus.classList.toggle('gameover', !!ended);
 }
 
+// What happens when a dark square is tapped. Like chess: the first tap
+// selects one of your pieces (its moves light up), the second tap moves
+// it there, or cancels if that isn't one of its moves.
 function onCheckersClick(e){
   if (checkersGameOverInfo().over) return;
   // Ignore clicks unless it's this player's turn (always true in hot-seat games)
   if (!localPlayerCanMove(CHECKERS.turn === 1 ? 'white' : 'black')) return;
 
+  // Which square was tapped (its row and column labels, set in initCheckers)
   var td = e.currentTarget;
   var r = Number(td.dataset.r), c = Number(td.dataset.c);
   var piece = CHECKERS.board[r][c];
 
+  // A piece is already selected: is this tap one of its moves?
   if (CHECKERS.selected){
     var sr = CHECKERS.selected.r, sc = CHECKERS.selected.c;
     var legal = checkersLegalMovesForSquare(sr, sc);
@@ -1649,10 +2075,12 @@ function onCheckersClick(e){
       renderCheckers();
       updateCheckersStatus();
 
+      // Online: send the move to your friend
       if (opponentMode === 'online') {
         Online.localMove({ from: {r: sr, c: sc}, to: {r: r, c: c}, captures: target.captures });
       }
 
+      // Against the computer: let it reply after a short pause (0.3 seconds)
       if (opponentMode === 'computer') {
         var aiTurn = playerColor === 'white' ? -1 : 1;
         if (CHECKERS.turn === aiTurn) {
@@ -1666,6 +2094,8 @@ function onCheckersClick(e){
     return;
   }
 
+  // Nothing selected yet: select this piece if it belongs to the player
+  // whose turn it is (Math.sign gives +1 or -1, matching CHECKERS.turn).
   // Only allow selecting pieces that belong to the current player
   if (piece !== 0 && Math.sign(piece) === CHECKERS.turn){
     CHECKERS.selected = {r: r, c: c};
@@ -1674,6 +2104,8 @@ function onCheckersClick(e){
   }
 }
 
+// Lights up where the selected piece can go (pink), and for jumps, the
+// pieces it would capture (orange, with an arrow showing which way it hops)
 function highlightMoves(r, c){
   var moves = checkersLegalMovesForSquare(r, c);
   var tbl = document.querySelector('table.checkers');
@@ -1688,12 +2120,15 @@ function highlightMoves(r, c){
       var fromR = r, fromC = c;
       for (var j = 0; j < m.captures.length; j++) {
         var cap = m.captures[j];
+        // Which way this hop goes: up or down (u/d), left or right (l/r).
+        // That picks the arrow style, e.g. 'jump-ul' shows ↖.
         var dr = cap.r > fromR ? 1 : -1;
         var dc = cap.c > fromC ? 1 : -1;
         var dirClass = 'jump-' + (dr < 0 ? 'u' : 'd') + (dc < 0 ? 'l' : 'r');
         var cell = tbl.rows[cap.r].cells[cap.c];
         cell.classList.add('jump-path');
         cell.classList.add(dirClass);
+        // The piece lands just beyond the captured one; the next hop starts there
         fromR = cap.r + dr;
         fromC = cap.c + dc;
       }
@@ -1701,6 +2136,7 @@ function highlightMoves(r, c){
   }
 }
 
+// Removes all the move/jump highlights
 function clearCheckersHighlights(){
   var tds = document.querySelectorAll('td.highlight, td.jump-path');
   for (var i = 0; i < tds.length; i++) {
@@ -1710,10 +2146,15 @@ function clearCheckersHighlights(){
   }
 }
 
+// All the moves of the one piece on row r, column c, ignoring what the
+// player's OTHER pieces could do (generateAllMoves handles that). Each
+// move is { toR, toC, captures: [the squares of pieces jumped over] }.
 function getLegalMoves(r, c){
   var piece = CHECKERS.board[r][c];
   if (piece === 0) return [];
 
+  // Which diagonal directions it may move in, as [row change, column change]:
+  // kings go all four ways; White pieces go up (row -1), Black ones down (+1)
   var dirs;
   if (Math.abs(piece) === 2) {
     dirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
@@ -1723,15 +2164,19 @@ function getLegalMoves(r, c){
 
   var moves = [];
   
-  // Captures first
+  // Captures first. A jump needs an ENEMY piece on the next diagonal
+  // square (r1, c1) and an EMPTY square just beyond it (r2, c2).
   for (var d = 0; d < dirs.length; d++){
     var dr = dirs[d][0], dc = dirs[d][1];
     var r1 = r + dr, c1 = c + dc;
     var r2 = r + 2*dr, c2 = c + 2*dc;
-    if (r2 < 0 || r2 > 7 || c2 < 0 || c2 > 7) continue;
+    if (r2 < 0 || r2 > 7 || c2 < 0 || c2 > 7) continue;   // would land off the board
     if (CHECKERS.board[r2][c2] === 0 &&
         CHECKERS.board[r1][c1] !== 0 &&
         Math.sign(CHECKERS.board[r1][c1]) === -Math.sign(piece)){
+      // Make the jump on a scratch copy of the board, then see if the
+      // piece can keep jumping from where it lands (a multi-jump). If so,
+      // the move is the whole chain; if not, it's this single jump.
       var copy = CHECKERS.board.map(function(row){return row.slice();});
       copy[r][c] = 0; copy[r1][c1] = 0; copy[r2][c2] = piece;
       var further = getLegalMovesRecursive(r2, c2, copy, piece);
@@ -1748,9 +2193,10 @@ function getLegalMoves(r, c){
       }
     }
   }
+  // If it can capture, only captures are allowed, so stop here
   if (moves.length) return moves;
 
-  // Normal moves
+  // Normal moves: one step diagonally onto an empty square
   for (var d2 = 0; d2 < dirs.length; d2++){
     var dr2 = dirs[d2][0], dc2 = dirs[d2][1];
     var nr = r + dr2, nc = c + dc2;
@@ -1760,6 +2206,10 @@ function getLegalMoves(r, c){
   return moves;
 }
 
+// The rest of a multi-jump: from square (r, c) on a scratch board, lists
+// every way the piece can keep jumping. It calls itself after each jump
+// (a "recursive" function), so chains of any length are found. Returns
+// an empty list when no further jump is possible.
 function getLegalMovesRecursive(r, c, boardCopy, piece){
   var dirs;
   if (Math.abs(piece) === 2) {
@@ -1809,6 +2259,9 @@ function checkersLegalMovesForSquare(r, c){
   return out;
 }
 
+// Plays a move on the real board: moves the piece from (fr, fc) to
+// (tr, tc), removes the captured pieces, crowns it if it reached the far
+// side (row 0 for White, row 7 for Black), then switches turns
 function makeCheckersMove(fr, fc, tr, tc, captures){
   var piece = CHECKERS.board[fr][fc];
   CHECKERS.board[fr][fc] = 0;
@@ -1823,7 +2276,11 @@ function makeCheckersMove(fr, fc, tr, tc, captures){
   CHECKERS.turn *= -1;
 }
 
-/* ---- Checkers AI ---- */
+/* ---- Checkers AI ----
+   The computer player for checkers works exactly like the chess one
+   (see COMPUTER PLAYER above): look a few moves ahead with minimax and
+   alpha-beta, and score positions with evaluateCheckers below. */
+// The computer's turn: find its best move and play it
 function computeCheckersAI(){
   if (opponentMode !== 'computer') return;
   if (checkersGameOverInfo().over){
@@ -1847,6 +2304,8 @@ function computeCheckersAI(){
   updateCheckersStatus();
 }
 
+// Tries every move and returns the one with the best outcome for "turn"
+// (White wants the highest score, Black the lowest)
 function checkersMinimaxRoot(depth, boardState, turn){
   var moves = generateAllMoves(boardState, turn);
   if (!moves.length) return null;
@@ -1856,6 +2315,7 @@ function checkersMinimaxRoot(depth, boardState, turn){
     var tmp = moves[i]; moves[i] = moves[j]; moves[j] = tmp;
   }
   
+  // (The shuffle above means equally good moves are picked at random)
   var bestScore = turn === 1 ? -Infinity : Infinity;
   var bestMove = null;
   for (var k = 0; k < moves.length; k++){
@@ -1871,6 +2331,8 @@ function checkersMinimaxRoot(depth, boardState, turn){
   return bestMove;
 }
 
+// Scores a position by looking "depth" more moves ahead, switching sides
+// each level, and skipping lines that can't matter (alpha-beta)
 function checkersMinimax(depth, boardState, turn, alpha, beta){
   if (depth === 0) return evaluateCheckers(boardState);
   var moves = generateAllMoves(boardState, turn);
@@ -1900,6 +2362,9 @@ function checkersMinimax(depth, boardState, turn, alpha, beta){
   }
 }
 
+// Every legal move for one side on a given board, each as
+// { from: {r,c}, to: {r,c}, captures: [...] }. This is where the
+// compulsory-capture rule is applied to the whole board.
 function generateAllMoves(boardState, turn){
   var all = [];
   var anyCapture = false;
@@ -1907,6 +2372,9 @@ function generateAllMoves(boardState, turn){
     for (var c = 0; c < 8; c++){
       var p = boardState[r][c];
       if (p !== 0 && Math.sign(p) === turn){
+        // getLegalMoves reads the main board, so lend it this board for a
+        // moment and then put the real one back (the computer passes in
+        // imaginary future boards while it thinks)
         var tempBoard = CHECKERS.board;
         CHECKERS.board = boardState;
         var moves = getLegalMoves(r, c);
@@ -1931,6 +2399,8 @@ function generateAllMoves(boardState, turn){
   return all;
 }
 
+// Like makeCheckersMove, but on a COPY of a board, leaving the original
+// untouched. The computer uses it to imagine positions while thinking.
 function applyCheckersMove(boardState, move){
   var copy = boardState.map(function(row){return row.slice();});
   var piece = copy[move.from.r][move.from.c];
@@ -1945,6 +2415,9 @@ function applyCheckersMove(boardState, move){
   return copy;
 }
 
+// The score of a checkers position (positive = good for White): each
+// piece counts 1 and each king 3, plus small bonuses for having moved
+// further up the board and for sitting in the middle four columns
 function evaluateCheckers(boardState){
   var score = 0;
   for (var r = 0; r < 8; r++) {
@@ -1973,13 +2446,27 @@ function evaluateCheckers(boardState){
    5. Every incoming move is checked against this page's own rules, so an
       impossible, out-of-turn or tampered move is simply ignored.
    The plain-English version is in PRIVACY.md.
+
+   A few words used below:
+   - RELAY: the small server in relay/worker.js. Two phones can't find
+     each other directly over the internet, so both connect to it.
+   - WEBSOCKET: a connection that stays open, so messages can flow both
+     ways instantly (unlike loading a web page, which is one request).
+   - ENCRYPT / KEY: scrambling a message so only someone with the same
+     key can unscramble it. Here the key comes from the secret code.
+   - "async" / "await": some steps take a moment (encryption, the
+     network). "await" means: wait for this to finish, then carry on,
+     without freezing the screen meanwhile.
    ========================================================== */
 
 // The only server this page talks to. If you run your own relay, change it
 // here AND in the Content-Security-Policy <meta> tag at the top of this file.
 var RELAY_URL = 'wss://chesshirecat-relay.infidien.workers.dev';
 
-/* ---- Secret codes: random words that are easy to read out and type ---- */
+/* ---- Secret codes: random words that are easy to read out and type ----
+   A code is four words picked at random from the list below. With 590
+   words that's 590 x 590 x 590 x 590, about 121 billion possible codes,
+   far too many for a stranger to guess. */
 var SecretCode = {
   WORDS: `
     acorn acre actor adobe agate agile alarm album alien alley alpine amber
@@ -2037,6 +2524,11 @@ var SecretCode = {
   // Every word is six letters or fewer, so it fits its box on a phone.
   // Picks words with the browser's cryptographic random generator. Numbers
   // that would make some words slightly more likely than others are skipped.
+  // (The random number is between 0 and about 4.3 billion; it's turned
+  // into a word number with "% n", the remainder after dividing by the
+  // number of words. Numbers above "limit" are thrown away and re-drawn,
+  // otherwise the first few words in the list would come up a tiny bit
+  // more often than the rest.)
   generate: function () {
     var n = this.WORDS.length;
     var limit = Math.floor(0x100000000 / n) * n;
@@ -2063,11 +2555,19 @@ var SecretCode = {
   }
 };
 
-/* ---- Seal: secret code -> room ID + key, and locking/unlocking messages ---- */
+/* ---- Seal: secret code -> room ID + key, and locking/unlocking messages ----
+   All the real cryptography is done by the browser itself
+   ("crypto.subtle", built into every modern browser); this code only
+   decides what to feed it. No home-made encryption. */
 var Seal = {
   SALT: 'chesshirecat/v1',  // public and fixed; changing it splits old and new versions
   ITERATIONS: 200000,       // makes every guess at a code deliberately slow
 
+  // Turns the secret code into 64 random-looking bytes with PBKDF2, a
+  // standard "password stretching" method: it runs SHA-256 200,000 times,
+  // so each guess at a code costs real computer time. The same code
+  // always gives the same bytes, which is how both players end up with
+  // the same room ID and key without ever sending the code anywhere.
   derive: async function (code) {
     var utf8 = new TextEncoder();
     var base = await crypto.subtle.importKey('raw', utf8.encode(code), 'PBKDF2', false, ['deriveBits']);
@@ -2082,7 +2582,10 @@ var Seal = {
   },
 
   // Encrypts a message. The room ID is mixed in, so a message can't be
-  // replayed into a different room.
+  // replayed into a different room. The "iv" is 12 fresh random bytes per
+  // message, so even two identical moves look completely different once
+  // scrambled. The result is "iv.scrambled-message", written with only
+  // letters, digits, "-" and "_" (base64url), safe to send as text.
   lock: async function (key, roomId, message) {
     var iv = crypto.getRandomValues(new Uint8Array(12));
     var sealed = await crypto.subtle.encrypt(
@@ -2107,11 +2610,15 @@ var Seal = {
   }
 };
 
+// Small converters between raw bytes and text:
+// toHex: bytes as hexadecimal digits (0-9, a-f), two per byte
 function toHex(bytes){
   var out = '';
   for (var i = 0; i < bytes.length; i++) out += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
   return out;
 }
+// toBase64Url / fromBase64Url: bytes as base64url text (A-Z, a-z, 0-9,
+// "-" and "_"), a compact way to write any bytes as plain text, and back
 function toBase64Url(bytes){
   var s = '';
   for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
@@ -2128,6 +2635,9 @@ function fromBase64Url(text){
    chess:    from + to + promotion        "e2e4", "e7e8q"
    checkers: from row/col + to row/col + one row/col pair per captured piece
              "5243" = 5,2 -> 4,3      "523443" = 5,2 -> 3,4 jumping 4,3     */
+// Writes a move as its short string (see above). The same move always
+// gives exactly the same string, so moves can be compared just by
+// comparing strings.
 function moveKey(mode, m){
   if (mode === 'chess') return m.from + m.to + (m.promotion || '');
   var key = '' + m.from.r + m.from.c + m.to.r + m.to.c;
@@ -2135,13 +2645,18 @@ function moveKey(mode, m){
   return key;
 }
 
-/* ---- The online session ---- */
+/* ---- The online session ----
+   Everything about one online game lives inside this "Online" bundle.
+   The (function () { ... })() wrapper keeps its inner workings private:
+   the rest of the page can only use the few functions listed in the
+   "return { ... }" at the very end. */
 var Online = (function () {
   var PROTOCOL = 2;        // bump if the message format changes
   var MAX_MOVES = 2000;    // longest game history we'll accept from the other player
   var PING_MS = 20000;     // keep-alive; the relay frees seats silent for a minute
   var MODES = ['chess', 'checkers'];
 
+  // Handles on the online panel's controls (see the HTML at the top)
   var ui = {
     panel: byId('onlinePanel'), setup: byId('onlineSetup'), session: byId('onlineSession'),
     name: byId('onlineName'), codeShown: byId('onlineCodeShown'), note: byId('onlineNote'),
@@ -2153,6 +2668,8 @@ var Online = (function () {
   var game = null;     // { mode, myColor, moves: [move keys], resigned: null | 'white' | 'black' }
   var busy = false;    // true while the secret code is being turned into a key
 
+  // Small helpers: find a page element; show a message on the orange
+  // status line; flip a colour; the other player's name
   function byId(id){ return document.getElementById(id); }
   function say(text){ ui.state.textContent = text; }
   function opposite(color){ return color === 'white' ? 'black' : 'white'; }
@@ -2166,6 +2683,8 @@ var Online = (function () {
       .trim().slice(0, 20);
   }
 
+  // Greys out the top-bar settings during an online game, so neither
+  // player can change the game type or reset the board on their own
   function lockSettings(locked){
     [modeSelect, opponentSelect, playerColorSelect, newGameBtn].forEach(function (control) {
       control.disabled = locked;
@@ -2174,10 +2693,12 @@ var Online = (function () {
 
   /* -- the four secret-code boxes -- */
 
+  // The code currently in the four boxes, joined with dashes
   function readCode(){
     return SecretCode.normalize(ui.words.map(function (box) { return box.value; }).join(' '));
   }
 
+  // Puts a code into the four boxes, one word per box
   function fillCode(code){
     var words = SecretCode.normalize(code).split('-');
     words.push(words.splice(3).join('-'));   // a longer homemade code keeps its extra words in box 4
@@ -2207,16 +2728,19 @@ var Online = (function () {
 
   /* -- the board -- */
 
+  // Whose turn it is in the online game, as 'white' or 'black'
   function turnColor(){
     if (game.mode === 'chess') return chess.turn() === 'w' ? 'white' : 'black';
     return CHECKERS.turn === 1 ? 'white' : 'black';
   }
 
+  // Has the online game ended (resigned, checkmate, no moves left...)?
   function isOver(){
     if (game.resigned) return true;
     return game.mode === 'chess' ? chess.game_over() : checkersGameOverInfo().over;
   }
 
+  // Starts a fresh board of the given game type, switching tabs if needed
   function resetBoard(mode){
     ui.nextMode.value = mode;
     if (modeSelect.value !== mode) {
@@ -2287,6 +2811,8 @@ var Online = (function () {
 
   /* -- the connection -- */
 
+  // Opens the connection to the relay for our room, and sets up what to
+  // do when messages arrive or the connection closes
   function connect(){
     var s = session;
     // The seat number lets the relay hand our seat straight back to us after
@@ -2301,7 +2827,9 @@ var Online = (function () {
     socket.onmessage = function (e) {
       if (session !== s || typeof e.data !== 'string') return;
       s.lastHeard = Date.now();
-      // One message at a time, in the order they arrived
+      // One message at a time, in the order they arrived. (Unscrambling
+      // takes a moment; "inbox" is a queue so a later message can't
+      // overtake an earlier one.)
       s.inbox = s.inbox.then(function () { return receive(s, e.data); }).catch(function () {});
     };
     socket.onclose = function (e) {
@@ -2324,6 +2852,8 @@ var Online = (function () {
     connect();
   }
 
+  // Our own connection closed. "code" is the reason number the relay
+  // gave (4001 = the room already has two players).
   function disconnected(code){
     var s = session;
     clearInterval(s.pinger);
@@ -2351,6 +2881,10 @@ var Online = (function () {
     say('Connection lost. Tap Reconnect to try again. Your game stays on this screen until you leave.');
   }
 
+  // Sends a message to the other player: labels it with our random tag
+  // and the next sequence number, encrypts it, and sends it. Like the
+  // inbox, "outbox" is a queue that keeps messages in order. Nothing is
+  // sent unless both players are connected.
   function send(message){
     var s = session;
     if (!s || !s.paired) return;
@@ -2362,6 +2896,11 @@ var Online = (function () {
       .catch(function () {});
   }
 
+  // Handles one incoming message: a plain note from the relay, or an
+  // encrypted message from the other player. The checks below throw away
+  // anything that can't be unscrambled with our key, our own messages
+  // echoed back, messages from anyone but the player who said hello, and
+  // old messages replayed again (their sequence number isn't newer).
   async function receive(s, data){
     if (data === 'pong') return;
     if (data.charAt(0) === '{') return fromRelay(s, data);
@@ -2372,6 +2911,8 @@ var Online = (function () {
     if (msg.from !== s.peerTag || !(msg.seq > s.peerSeq)) return;  // stranger or replayed message
     s.peerSeq = msg.seq;
 
+    // Hand the message to the matching handler below. Anything with an
+    // unknown type is ignored.
     switch (msg.t) {
       case 'hello':   onHello(msg); break;
       case 'game':    onGame(msg); break;
@@ -2410,6 +2951,8 @@ var Online = (function () {
 
   /* -- messages from the other player -- */
 
+  // "hello": the other player has (re)connected and told us their name
+  // and version. If we already have a game, send it to them.
   function onHello(msg){
     var s = session;
     s.peerName = cleanName(msg.name) || 'Friend';
@@ -2426,12 +2969,14 @@ var Online = (function () {
     refresh();
   }
 
+  // "bye": the other player tapped Leave on purpose
   function onBye(){
     session.peerAway = 'left';
     say(peer() + ' left the game. Tap Leave when you are done, or wait: they can rejoin with the same code.');
     refresh();
   }
 
+  // Sends our whole copy of the game: type, our colour, every move so far
   function sendGame(){
     send({ t: 'game', mode: game.mode, color: game.myColor, moves: game.moves, resigned: game.resigned });
   }
@@ -2470,12 +3015,15 @@ var Online = (function () {
     }
   }
 
+  // Does "list" begin with exactly the moves in "prefix"?
   function startsWith(list, prefix){
     if (prefix.length > list.length) return false;
     for (var i = 0; i < prefix.length; i++) if (list[i] !== prefix[i]) return false;
     return true;
   }
 
+  // "move": the other player made a move. It's only accepted if it's the
+  // very next move (n), it's their turn, and it's legal right now.
   function onMove(msg){
     if (!game || isOver()) return;
     if (msg.n !== game.moves.length) return;       // out of order or a duplicate
@@ -2485,12 +3033,14 @@ var Online = (function () {
     refresh(game.mode === 'chess' ? peer() + ' played: ' + describeMove(lastMove) : null);
   }
 
+  // "resign": the other player gave up, so we win
   function onResign(){
     if (!game || isOver()) return;
     game.resigned = opposite(game.myColor);
     refresh();
   }
 
+  // "newgame": the other player asked for (or accepted) a new game
   function onNewGame(msg){
     var s = session;
     if (!game || MODES.indexOf(msg.mode) < 0) return;
@@ -2518,6 +3068,8 @@ var Online = (function () {
 
   /* -- buttons -- */
 
+  // Create game / Join game: checks the code, turns it into a room ID and
+  // key, sets up the session and connects. role is 'create' or 'join'.
   async function begin(role){
     if (session || busy) return;
     if (!window.crypto || !crypto.subtle || !window.WebSocket) {
@@ -2569,6 +3121,8 @@ var Online = (function () {
     connect();
   }
 
+  // Leave: tells the other player, closes the connection and forgets
+  // everything about the game (nothing was ever saved)
   function leave(){
     if (!session) return;
     var s = session;
@@ -2585,6 +3139,7 @@ var Online = (function () {
     initGame();
   }
 
+  // Resign: after a confirmation, gives up this game and tells the other player
   function resign(){
     if (!game || isOver() || !window.confirm('Resign this game?')) return;
     game.resigned = game.myColor;
@@ -2648,11 +3203,13 @@ var Online = (function () {
     else connect();
   });
 
+  // Shows or hides the online panel and the note at the bottom
   function show(visible){
     ui.panel.hidden = !visible;
     ui.note.hidden = !visible;
   }
 
+  // Connect each online button to what it does
   byId('onlineDice').addEventListener('click', function () { fillCode(SecretCode.generate()); });
   byId('onlineCreate').addEventListener('click', function () { begin('create'); });
   byId('onlineJoin').addEventListener('click', function () { begin('join'); });
@@ -2665,11 +3222,16 @@ var Online = (function () {
   byId('onlineLeave').addEventListener('click', leave);
   byId('onlineRelay').textContent = RELAY_URL.replace(/^wss:\/\//, '');
 
+  // The parts of "Online" the rest of the page may use. Everything else
+  // above stays private to this section.
   return {
     show: show,
     readInvite: readInvite,
+    // Our colour in the online game (or the "Play as" choice before one starts)
     myColor: function () { return game ? game.myColor : playerColor; },
     peerName: peer,
+    // May we move pieces of this colour right now? Only when connected,
+    // the game isn't over, and it's our colour
     canMove: function (color) {
       return !!(session && session.paired && game && !game.resigned && color === game.myColor);
     },
@@ -2689,6 +3251,7 @@ var Online = (function () {
       }
       return 'Waiting for ' + peer() + "'s move";
     },
+    // The status-line text while an online game is going
     turnText: function (color) {
       if (!session) return 'Create or join an online game above';
       if (!game) return 'Waiting for the game to start…';
@@ -2698,6 +3261,7 @@ var Online = (function () {
       var name = color === 'white' ? 'White' : 'Black';
       return color === game.myColor ? 'Your turn (' + name + ')' : peer() + "'s turn (" + name + ')';
     },
+    // The game-over text after a resignation, if there was one
     resignText: function () {
       if (!game || !game.resigned) return null;
       return game.resigned === game.myColor ? 'You resigned. ' + peer() + ' wins!' : peer() + ' resigned. You win!';
@@ -2707,7 +3271,12 @@ var Online = (function () {
 
 /* ==========================================================
    GLOBAL INITIALIZATION
+   ----------------------------------------------------------
+   Everything above only DEFINES things. These last lines are what
+   actually runs when the page opens.
    ========================================================== */
+// Starts a new game of whichever type the Mode menu shows. ('chess2p' is
+// left over from an older version of the menu and no longer used.)
 function initGame(){
   if (modeSelect.value === 'chess' || modeSelect.value === 'chess2p'){
     initChess();
@@ -2715,6 +3284,9 @@ function initGame(){
     initCheckers();
   }
 }
+// When the page opens: if it was opened from an invite link, fill in the
+// code; show the online panel if "Online friend" is selected; draw a
+// fresh board; and make the New Game button start a new game.
 Online.readInvite();
 Online.show(opponentMode === 'online');
 initGame();
@@ -2722,6 +3294,10 @@ newGameBtn.addEventListener('click', initGame);
 </script>
 
 <script>
+// Offline support: registers sw.js (a "service worker"), a small helper
+// the browser keeps around that saves a copy of the game, so it still
+// opens without an internet connection. It only works when the page comes
+// from a website (http/https), not when opened as a file from your computer.
 if (
   'serviceWorker' in navigator &&
   (window.location.protocol === 'https:' || window.location.protocol === 'http:')

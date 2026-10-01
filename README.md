@@ -3,6 +3,12 @@
 Chess and checkers in a single web page. Play against the computer
 ("Chessckers"), with two people on one screen, or with a friend online.
 
+With two people on one screen, **Board: Turns each move** spins the board
+so whoever's turn it is has their pieces at the bottom (handy when passing
+one device back and forth); **Stays put** suits players sitting across a
+table. Every part of the code is annotated in plain English for anyone
+curious how it works: start at the top of `index.html`.
+
 **Play:** https://andersonkellg.github.io/ChesshireCat/ (also installs as an
 app from the browser's *Add to Home Screen*).
 
