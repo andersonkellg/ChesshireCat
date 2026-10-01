@@ -1295,7 +1295,11 @@ class Chess {
       to: found.to,
       piece: undo.piece.type,
       color: undo.piece.color,
-      captured: undo.captured ? undo.captured.type : undefined,
+      // What was captured. In en passant the captured pawn wasn't on the
+      // destination square, so it's recorded separately (epCaptured).
+      captured: undo.captured ? undo.captured.type : (undo.epCaptured ? undo.epCaptured.type : undefined),
+      enPassant: !!undo.epCaptured,
+      castling: found.castling,   // 'K'/'k' king-side, 'Q'/'q' queen-side, or nothing
       promotion: found.promotion
     };
   }
@@ -1540,11 +1544,10 @@ function describePieceAtSquare(square) {
   return color + ' ' + pieceName + ' ' + square.toUpperCase();
 }
 
-// Words for a move that has just been played, e.g. "Pawn E2 to E4" or
-// "Knight F3 takes Bishop at E5". It looks at the piece now standing on
-// the destination square. (Note: the engine never fills in move.flags,
-// so castling is described as an ordinary king move, e.g. "King E1 to
-// G1", and an en passant capture as an ordinary pawn move.)
+// Words for a move that has just been played, e.g. "Pawn E2 to E4",
+// "Knight F3 takes Bishop at E5", "Kingside Castle", or "Pawn E5 takes
+// Pawn at D6 (en passant)". It looks at the piece now standing on the
+// destination square.
 function describeMove(move) {
   var piece = chess.get(move.to);
   if (!piece) return '';
@@ -1553,13 +1556,14 @@ function describeMove(move) {
   var fromSquare = move.from.toUpperCase();
   var toSquare = move.to.toUpperCase();
 
-  if (move.captured) {
-    var capturedName = getPieceName({type: move.captured});
-    return pieceName + ' ' + fromSquare + ' takes ' + capturedName + ' at ' + toSquare;
-  } else if (move.flags && move.flags.indexOf('k') !== -1) {
+  if (move.castling === 'K' || move.castling === 'k') {
     return 'Kingside Castle';
-  } else if (move.flags && move.flags.indexOf('q') !== -1) {
+  } else if (move.castling === 'Q' || move.castling === 'q') {
     return 'Queenside Castle';
+  } else if (move.captured) {
+    var capturedName = getPieceName({type: move.captured});
+    var how = move.enPassant ? ' (en passant)' : '';
+    return pieceName + ' ' + fromSquare + ' takes ' + capturedName + ' at ' + toSquare + how;
   } else if (move.promotion) {
     var promotedName = getPieceName({type: move.promotion});
     return pieceName + ' ' + fromSquare + ' to ' + toSquare + ', promotes to ' + promotedName;
@@ -1706,7 +1710,7 @@ function handleChessSquareClick(sq){
       return;
     }
 
-    lastMove = { from: move.from, to: move.to, captured: move.captured, flags: move.flags, promotion: move.promotion };
+    lastMove = move;
 
     // Show move description
     updateMoveNotation('Last move: ' + describeMove(lastMove));
@@ -1759,7 +1763,7 @@ function computeChessAI(){
   }
   var move = chess.move(best);
   if (move) {
-    lastMove = { from: move.from, to: move.to, captured: move.captured, flags: move.flags, promotion: move.promotion };
+    lastMove = move;
     updateMoveNotation('Chessckers played: ' + describeMove(lastMove));
   }
   renderChessBoard();
@@ -1934,8 +1938,14 @@ var CHECKERS = {
   board: [],        // the 8x8 numbers described above
   turn: 1,          // 1 = White to move, -1 = Black
   selected: null,   // the piece tapped first, as {r: row, c: column}
-  lastMove: null    // the last move, outlined in yellow: {from: {r,c}, to: {r,c}}
+  lastMove: null,   // the last move, outlined in yellow: {from: {r,c}, to: {r,c}}
+  quietMoves: 0     // moves in a row with no capture or crowning (for the draw rule)
 };
+
+// Draw rule: with just one king each left, neither side can force a win,
+// so after this many moves (10 each) without a capture it's a draw. A
+// careless move can still lose a king to a jump before then.
+var KINGS_DRAW_MOVES = 20;
 var checkersStatus = document.getElementById('checkersStatus');
 
 // Builds the checkers board on the page (a table of 8 rows of 8 cells)
@@ -1985,6 +1995,7 @@ function resetCheckersState(){
   for (var rr2 = 5; rr2 < 8; rr2++) for (var cc2 = 0; cc2 < 8; cc2++) if ((rr2 + cc2) % 2 === 1) s[rr2][cc2] = 1;
   CHECKERS.board = s;
   CHECKERS.turn = 1;
+  CHECKERS.quietMoves = 0;
   CHECKERS.selected = null;
   CHECKERS.lastMove = null;
 }
@@ -2033,17 +2044,35 @@ function checkersGameOverInfo(){
   }
   if (whiteCount === 0) return { over: true, message: 'Black wins!' };
   if (blackCount === 0) return { over: true, message: 'White wins!' };
+  if (kingsDrawCountdown() === 0) {
+    return { over: true, message: 'Draw! (one king each, 10 moves each without a capture)' };
+  }
   if (generateAllMoves(CHECKERS.board, CHECKERS.turn).length === 0) {
     return { over: true, message: (CHECKERS.turn === 1 ? 'Black wins!' : 'White wins!') + ' (no moves left)' };
   }
   return { over: false, message: null };
 }
 
+// With exactly one king each on the board: how many more moves (counting
+// both players) until the game is drawn. Otherwise null (no countdown).
+function kingsDrawCountdown(){
+  var pieces = [];
+  for (var r = 0; r < 8; r++) {
+    for (var c = 0; c < 8; c++) if (CHECKERS.board[r][c] !== 0) pieces.push(CHECKERS.board[r][c]);
+  }
+  // 2 + -2 = 0: exactly a white king and a black king
+  if (pieces.length !== 2 || pieces[0] + pieces[1] !== 0 || Math.abs(pieces[0]) !== 2) return null;
+  return Math.max(0, KINGS_DRAW_MOVES - CHECKERS.quietMoves);
+}
+
 // Updates the status line under the board: game over, or whose turn
+// (plus the draw countdown when only one king each is left)
 function updateCheckersStatus() {
   var info = checkersGameOverInfo();
   var ended = info.over ? info.message : resignedText();
-  checkersStatus.textContent = ended || turnPrompt(CHECKERS.turn === 1 ? 'white' : 'black');
+  var left = kingsDrawCountdown();
+  var countdown = left === null ? '' : ' · draw in ' + left + (left === 1 ? ' move' : ' moves');
+  checkersStatus.textContent = ended || turnPrompt(CHECKERS.turn === 1 ? 'white' : 'black') + countdown;
   checkersStatus.classList.toggle('gameover', !!ended);
 }
 
@@ -2261,7 +2290,8 @@ function checkersLegalMovesForSquare(r, c){
 
 // Plays a move on the real board: moves the piece from (fr, fc) to
 // (tr, tc), removes the captured pieces, crowns it if it reached the far
-// side (row 0 for White, row 7 for Black), then switches turns
+// side (row 0 for White, row 7 for Black), counts it for the draw rule,
+// then switches turns
 function makeCheckersMove(fr, fc, tr, tc, captures){
   var piece = CHECKERS.board[fr][fc];
   CHECKERS.board[fr][fc] = 0;
@@ -2272,6 +2302,9 @@ function makeCheckersMove(fr, fc, tr, tc, captures){
   }
   if (piece === 1 && tr === 0) CHECKERS.board[tr][tc] = 2;
   if (piece === -1 && tr === 7) CHECKERS.board[tr][tc] = -2;
+  // A capture or a crowning restarts the draw count; any other move adds one
+  var crowned = CHECKERS.board[tr][tc] !== piece;
+  CHECKERS.quietMoves = (captures.length || crowned) ? 0 : CHECKERS.quietMoves + 1;
   CHECKERS.lastMove = { from: {r:fr, c:fc}, to: {r:tr, c:tc} };
   CHECKERS.turn *= -1;
 }
@@ -2651,7 +2684,7 @@ function moveKey(mode, m){
    the rest of the page can only use the few functions listed in the
    "return { ... }" at the very end. */
 var Online = (function () {
-  var PROTOCOL = 2;        // bump if the message format changes
+  var PROTOCOL = 3;        // bump if the message format or the rules change
   var MAX_MOVES = 2000;    // longest game history we'll accept from the other player
   var PING_MS = 20000;     // keep-alive; the relay frees seats silent for a minute
   var MODES = ['chess', 'checkers'];
@@ -2778,7 +2811,7 @@ var Online = (function () {
         if (moveKey('chess', legal[i]) !== key) continue;
         var done = chess.move({ from: legal[i].from, to: legal[i].to, promotion: legal[i].promotion });
         if (!done) return false;
-        lastMove = { from: done.from, to: done.to, captured: done.captured, promotion: done.promotion };
+        lastMove = done;
         return true;
       }
     } else {
@@ -3275,10 +3308,9 @@ var Online = (function () {
    Everything above only DEFINES things. These last lines are what
    actually runs when the page opens.
    ========================================================== */
-// Starts a new game of whichever type the Mode menu shows. ('chess2p' is
-// left over from an older version of the menu and no longer used.)
+// Starts a new game of whichever type the Mode menu shows
 function initGame(){
-  if (modeSelect.value === 'chess' || modeSelect.value === 'chess2p'){
+  if (modeSelect.value === 'chess'){
     initChess();
   } else {
     initCheckers();
