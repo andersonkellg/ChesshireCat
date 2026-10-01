@@ -71,7 +71,7 @@ Everything is in two small places:
 
 - `index.html`: search for **ONLINE PLAY**. That section is the entire online
   feature: secret codes, encryption, connection, and move checking.
-- `relay/worker.js`: the whole relay, about 150 lines including comments.
+- `relay/worker.js`: the whole relay, under 200 lines including comments.
 
 Quick checks anyone can do:
 
@@ -81,9 +81,13 @@ Quick checks anyone can do:
 2. **Is the relay logging?** Look for `[observability] enabled = false` in
    `relay/wrangler.toml`, and notice `worker.js` never calls `console.log` or
    uses storage.
-3. **Is my copy the published one?** Each release lists the SHA-256 of
-   `index.html`. Compare it with `shasum -a 256 index.html` on Mac/Linux, or
-   save the file from a release and open it locally instead of from the
-   website.
+3. **Is the website running the published code?** On a Mac, paste these
+   two lines into Terminal. Matching numbers mean the live page is exactly
+   the code in this repo:
+
+   ```
+   curl -s https://andersonkellg.github.io/ChesshireCat/index.html | shasum -a 256
+   curl -s https://raw.githubusercontent.com/andersonkellg/ChesshireCat/main/index.html | shasum -a 256
+   ```
 4. **Watch it work:** open your browser's developer tools → Network → WS
    while playing. Every message after the first two is scrambled text.
