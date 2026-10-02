@@ -350,8 +350,9 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 .code-words span{color:#a2a2c2;}
 /* The secret code and relay address are shown in a typewriter-style font */
 .online-panel code, .online-note code{font-family:ui-monospace,Menlo,Consolas,monospace;}
-/* The "Chess/Checkers" picker and its New game button stay side by side */
-.online-next{display:inline-flex;gap:0.25rem;}
+/* The next-game pickers (Chess/Checkers, White/Black) and their Offer/Ask
+   button stay together, wrapping only on very narrow screens */
+.online-next{display:inline-flex;flex-wrap:wrap;gap:0.25rem;}
 /* Less important buttons (Share, Resign, Leave) are dark with a pink edge */
 .online-panel button.secondary{background:#0f3460;border:1px solid #e94560;}
 .online-panel button:disabled{opacity:0.5;cursor:default;transform:none;box-shadow:none;}
@@ -491,17 +492,23 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
       <button id="onlineCreate">Create game</button>
       <button id="onlineJoin">Join game</button>
     </div>
-    <!-- During a game: the code, plus buttons to invite, start a new game
-         (chess or checkers), resign, reconnect after a dropout, or leave -->
+    <!-- During a game: the code, plus buttons to invite, propose a new
+         game, resign, reconnect after a dropout, or leave -->
     <div id="onlineSession" class="online-row" hidden>
       <span>Secret code: <code id="onlineCodeShown"></code></span>
       <button id="onlineShare" class="secondary">Share invite</button>
-      <span class="online-next">
+      <!-- The next game: which one, and your colour. The host (who tapped
+           Create) offers it; the other player can ask for it. -->
+      <span id="onlineNext" class="online-next">
         <select id="onlineNextMode" aria-label="Next game">
           <option value="chess">Chess</option>
           <option value="checkers">Checkers</option>
         </select>
-        <button id="onlineNewGame">New game</button>
+        <select id="onlineNextColor" aria-label="Your colour in the next game">
+          <option value="white">as White</option>
+          <option value="black">as Black</option>
+        </select>
+        <button id="onlineNewGame">Offer new game</button>
       </span>
       <button id="onlineResign" class="secondary">Resign</button>
       <button id="onlineReconnect" hidden>Reconnect</button>
@@ -511,6 +518,14 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
          role="status" makes screen readers announce it when it changes. -->
     <div id="onlineState" class="online-state" role="status">
       Tap 🎲 and Create a game, or type your friend's secret code and Join.
+    </div>
+    <!-- Answers to the other player's new-game offer (or request). The host
+         only sees Approve and Decline; the other player sees all four. -->
+    <div id="onlineReply" class="online-row" hidden>
+      <button id="onlineYes">Accept</button>
+      <button id="onlineSwap" class="secondary">Swap colors</button>
+      <button id="onlineOther" class="secondary">Checkers instead</button>
+      <button id="onlineNo" class="secondary">Decline</button>
     </div>
   </section>
 
@@ -2684,7 +2699,7 @@ function moveKey(mode, m){
    the rest of the page can only use the few functions listed in the
    "return { ... }" at the very end. */
 var Online = (function () {
-  var PROTOCOL = 3;        // bump if the message format or the rules change
+  var PROTOCOL = 4;        // bump if the message format or the rules change
   var MAX_MOVES = 2000;    // longest game history we'll accept from the other player
   var PING_MS = 20000;     // keep-alive; the relay frees seats silent for a minute
   var MODES = ['chess', 'checkers'];
@@ -2694,7 +2709,10 @@ var Online = (function () {
     panel: byId('onlinePanel'), setup: byId('onlineSetup'), session: byId('onlineSession'),
     name: byId('onlineName'), codeShown: byId('onlineCodeShown'), note: byId('onlineNote'),
     words: Array.prototype.slice.call(byId('onlineCode').querySelectorAll('input')),
-    nextMode: byId('onlineNextMode'), state: byId('onlineState'), reconnect: byId('onlineReconnect')
+    next: byId('onlineNext'), nextMode: byId('onlineNextMode'), nextColor: byId('onlineNextColor'),
+    newGame: byId('onlineNewGame'), state: byId('onlineState'), reconnect: byId('onlineReconnect'),
+    reply: byId('onlineReply'), yes: byId('onlineYes'), swap: byId('onlineSwap'),
+    other: byId('onlineOther'), no: byId('onlineNo')
   };
 
   var session = null;  // the connection and the two players; null when not online
@@ -2774,8 +2792,10 @@ var Online = (function () {
   }
 
   // Starts a fresh board of the given game type, switching tabs if needed
+  // (The next-game pickers default to the same game with colours swapped.)
   function resetBoard(mode){
     ui.nextMode.value = mode;
+    ui.nextColor.value = opposite(game.myColor);
     if (modeSelect.value !== mode) {
       modeSelect.value = mode;
       showTab(mode);   // switches tab and calls initGame()
@@ -2799,6 +2819,7 @@ var Online = (function () {
       renderCheckers();
       updateCheckersStatus();
     }
+    showChoices();
   }
 
   // Plays a move only if it exactly matches one of the legal moves right now.
@@ -2951,7 +2972,11 @@ var Online = (function () {
       case 'game':    onGame(msg); break;
       case 'move':    onMove(msg); break;
       case 'resign':  onResign(); break;
-      case 'newgame': onNewGame(msg); break;
+      case 'offer':   onOffer(msg); break;
+      case 'ask':     onAsk(msg); break;
+      case 'accept':  onAccept(msg); break;
+      case 'decline': onDecline(msg); break;
+      case 'start':   onStart(msg); break;
       case 'bye':     onBye(); break;
     }
   }
@@ -2999,6 +3024,7 @@ var Online = (function () {
     s.peerKnown = true;
     s.peerAway = null;
     if (game) sendGame();
+    resumeTalks();
     refresh();
   }
 
@@ -3009,14 +3035,17 @@ var Online = (function () {
     refresh();
   }
 
-  // Sends our whole copy of the game: type, our colour, every move so far
+  // Sends our whole copy of the game: type, our colour, every move so far,
+  // and whether we're the host
   function sendGame(){
-    send({ t: 'game', mode: game.mode, color: game.myColor, moves: game.moves, resigned: game.resigned });
+    send({ t: 'game', mode: game.mode, color: game.myColor, moves: game.moves,
+      resigned: game.resigned, host: session.host });
   }
 
   // The other player's copy of the game. We adopt it if we have none (we
   // joined, or reloaded), or catch up if it is our game plus their newer
-  // moves. Anything else is refused.
+  // moves. Anything else is refused. Adopting a game also tells us who the
+  // host is, so a host who reloads the page and rejoins is host again.
   function onGame(msg){
     if ((msg.mode !== 'chess' && msg.mode !== 'checkers') ||
         (msg.color !== 'white' && msg.color !== 'black') ||
@@ -3025,13 +3054,13 @@ var Online = (function () {
     var resigned = msg.resigned === msg.color ? msg.color : null;
 
     if (game) {
-      if (game.myColor === msg.color || game.mode !== msg.mode) {
+      if (msg.host === session.host || game.myColor === msg.color || game.mode !== msg.mode) {
         say('You both pressed Create. One of you: tap Leave, then Join with the same code.');
         return;
       }
       var theyAreAhead = startsWith(msg.moves, game.moves);
       if (!theyAreAhead) {
-        if (!startsWith(game.moves, msg.moves)) say("Your boards don't match. Tap New game to start fresh.");
+        if (!startsWith(game.moves, msg.moves)) say("Your boards don't match. Start a new game to fix it.");
         return;   // otherwise they're behind us and will catch up from our copy
       }
       if (msg.moves.length === game.moves.length && (game.resigned || !resigned)) return;  // nothing new
@@ -3039,6 +3068,7 @@ var Online = (function () {
 
     var before = game;
     var next = { mode: msg.mode, myColor: opposite(msg.color), moves: msg.moves, resigned: resigned };
+    session.host = msg.host !== true;   // (unchanged if we already had the game: checked above)
     if (rebuild(next, before ? before.moves.length : next.moves.length)) {
       say('Playing with ' + peer() + '. You are ' + game.myColor + '.');
     } else {
@@ -3073,30 +3103,163 @@ var Online = (function () {
     refresh();
   }
 
-  // "newgame": the other player asked for (or accepted) a new game
-  function onNewGame(msg){
-    var s = session;
-    if (!game || MODES.indexOf(msg.mode) < 0) return;
-    s.nextGame.peer = msg.mode;
-    if (s.nextGame.me) {
-      startNewGame();
+  /* -- new games: the host offers, the other player answers --
+     The player who tapped Create is the HOST. Only the host starts new
+     games, and only ones the other player (the GUEST) has agreed to:
+
+       host offers     "chess, host plays white"    (offer)
+       guest accepts                                (accept)  -> host starts it
+         or asks for something else                 (ask)     -> host approves it,
+                                                                 or offers again
+         or says no                                 (decline)
+
+     The guest can also ask for a new game at any time. What's being
+     discussed is kept in session.talk, on both screens:
+       offer:  the host's latest offer
+       ask:    the guest's latest request
+       agreed: (guest only) every game the guest said yes to or asked for,
+               by id. The guest's page only starts one of these, so the
+               host can't force a restart in the middle of a game.
+     Each offer or request is { id, mode, hostColor }. The random id makes
+     sure an answer to an old offer can't count as an answer to a new one.
+     In messages, "color" is always the HOST's colour. */
+
+  // A fresh, empty conversation (at the start, and after every new game)
+  function newTalk(){ return { offer: null, ask: null, agreed: {} }; }
+
+  // Makes an offer or request with a new random id
+  function proposal(mode, hostColor){
+    return { id: toHex(crypto.getRandomValues(new Uint8Array(4))), mode: mode, hostColor: hostColor };
+  }
+
+  // Turns an incoming offer or request into one, or null if it's malformed
+  function readProposal(msg){
+    if (MODES.indexOf(msg.mode) < 0 || (msg.color !== 'white' && msg.color !== 'black') ||
+        typeof msg.id !== 'string' || !/^[0-9a-f]{8}$/.test(msg.id)) return null;
+    return { id: msg.id, mode: msg.mode, hostColor: msg.color };
+  }
+
+  // Describes an offer from this player's side, e.g. "chess, you play white"
+  function describe(p){
+    return p.mode + ', you play ' + (session.host ? p.hostColor : opposite(p.hostColor));
+  }
+
+  // Sends our offer (host) or request (guest) to the other player
+  function sendProposal(p){
+    send({ t: session.host ? 'offer' : 'ask', id: p.id, mode: p.mode, color: p.hostColor });
+  }
+
+  // After a reconnect: drop what the other player had proposed (they send
+  // it again if it still stands) and send ours again
+  function resumeTalks(){
+    var talk = session.talk;
+    if (session.host) {
+      talk.ask = null;
+      if (talk.offer) sendProposal(talk.offer);
     } else {
-      ui.nextMode.value = msg.mode;
-      say(peer() + ' wants a new game of ' + msg.mode + '! Tap New game to play.');
+      talk.offer = null;
+      if (talk.ask) sendProposal(talk.ask);
     }
   }
 
-  // Both players asked. Colors swap every game. If both asked at the same
-  // moment for different games, both sides pick the same one by comparing
-  // their random tags.
-  function startNewGame(){
+  // Shows the new-game controls: "Offer new game" for the host, "Ask for
+  // new game" for the guest, and the answer buttons when there's something
+  // from the other player to answer
+  function showChoices(){
     var s = session;
-    var mine = s.nextGame.me, theirs = s.nextGame.peer;
-    var mode = mine === theirs || s.tag < s.peerTag ? mine : theirs;
-    s.nextGame = { me: null, peer: null };
-    game = { mode: mode, myColor: opposite(game.myColor), moves: [], resigned: null };
-    resetBoard(mode);
-    say('New game of ' + mode + '! You are ' + game.myColor + '.');
+    var ready = !!(s && game);
+    ui.next.hidden = !ready;
+    ui.newGame.disabled = !(ready && s.paired);
+    if (ready) ui.newGame.textContent = s.host ? 'Offer new game' : 'Ask for new game';
+    var theirs = ready && s.paired && (s.host ? s.talk.ask : s.talk.offer);
+    ui.reply.hidden = !theirs;
+    if (!theirs) return;
+    ui.yes.textContent = s.host ? 'Approve' : 'Accept';
+    ui.swap.hidden = ui.other.hidden = s.host;
+    ui.other.textContent = (theirs.mode === 'chess' ? 'Checkers' : 'Chess') + ' instead';
+  }
+
+  // Both screens: replace the board with the agreed new game
+  function newRound(p){
+    session.talk = newTalk();
+    game = { mode: p.mode, myColor: session.host ? p.hostColor : opposite(p.hostColor), moves: [], resigned: null };
+    resetBoard(game.mode);
+    say('New game of ' + game.mode + '! You are ' + game.myColor + '.');
+    refresh();
+  }
+
+  // Host only: start an agreed game and tell the guest
+  function startGame(p){
+    send({ t: 'start', id: p.id, mode: p.mode, color: p.hostColor });
+    newRound(p);
+  }
+
+  // "offer" (guest receives): the host offers a new game
+  function onOffer(msg){
+    var s = session, p = readProposal(msg);
+    if (s.host || !game || !p) return;
+    if (s.talk.agreed[p.id]) {   // sent again after a reconnect: we already said yes
+      send({ t: 'accept', id: p.id });
+      return;
+    }
+    s.talk.offer = p;
+    say(peer() + ' offers a new game: ' + describe(p) + '.' +
+      (isOver() ? '' : ' Accepting ends this game.'));
+    showChoices();
+  }
+
+  // "ask" (host receives): the guest asks for a new game
+  function onAsk(msg){
+    var s = session, p = readProposal(msg);
+    if (!s.host || !game || !p) return;
+    s.talk.ask = p;
+    say(peer() + ' asks for a new game: ' + describe(p) + '.' +
+      ' Approve it, or pick something else and Offer that instead.');
+    showChoices();
+  }
+
+  // "accept" (host receives): the guest said yes to our latest offer
+  function onAccept(msg){
+    var offer = session.talk.offer;
+    if (!session.host || !offer || offer.id !== msg.id) return;
+    startGame(offer);
+  }
+
+  // "decline": the other player said no to our offer or request
+  function onDecline(msg){
+    var talk = session.talk;
+    var mine = session.host ? talk.offer : talk.ask;
+    if (!mine || mine.id !== msg.id) return;
+    if (session.host) talk.offer = null;
+    else { talk.ask = null; delete talk.agreed[mine.id]; }
+    say(peer() + ' said no to the new game.');
+    showChoices();
+  }
+
+  // "start" (guest receives): the host started a new game. Only a game we
+  // agreed to (or asked for), with exactly the agreed settings, starts.
+  function onStart(msg){
+    var s = session, p = s.talk.agreed[msg.id];
+    if (s.host || !p || p.mode !== msg.mode || p.hostColor !== msg.color) return;
+    newRound(p);
+  }
+
+  // Sends a new offer (host) or request (guest) of our own
+  function suggest(mode, hostColor){
+    var s = session;
+    if (!s || !s.paired || !game) return;
+    var p = proposal(mode, hostColor);
+    if (s.host) {
+      s.talk.offer = p;
+      s.talk.ask = null;   // offering something else is the answer to their request
+    } else {
+      s.talk.ask = p;
+      s.talk.offer = null;
+      s.talk.agreed[p.id] = p;
+    }
+    sendProposal(p);
+    say((s.host ? 'Offered ' : 'Asked for ') + describe(p) + '. Waiting for ' + peer() + '…');
+    showChoices();
   }
 
   /* -- buttons -- */
@@ -3136,7 +3299,8 @@ var Online = (function () {
       seq: 0, peerTag: null, peerSeq: 0, peerName: 'your friend',
       peerKnown: false, peerAway: null,   // peerAway: null, 'dropped' or 'left'
       paired: false, socket: null, pinger: null, lastHeard: 0, retries: 0,
-      nextGame: { me: null, peer: null },   // which game each player asked for next
+      host: role === 'create',   // the host offers new games (see "new games" above)
+      talk: newTalk(),           // the new-game conversation
       inbox: Promise.resolve(), outbox: Promise.resolve()
     };
     lockSettings(true);
@@ -3168,6 +3332,7 @@ var Online = (function () {
     ui.session.hidden = true;
     ui.reconnect.hidden = true;
     lockSettings(false);
+    showChoices();
     say('You left the game. Nothing about it was saved.');
     initGame();
   }
@@ -3180,15 +3345,51 @@ var Online = (function () {
     refresh();
   }
 
-  // Asks for (or accepts) a new game in the same room. Accepting takes the
-  // game type the other player asked for.
+  // Offer new game / Ask for new game: uses the two next-game pickers.
+  // The colour picker is your own colour, so the host's is worked out.
   function newGame(){
+    if (!session) return;
+    var mine = ui.nextColor.value;
+    suggest(ui.nextMode.value, session.host ? mine : opposite(mine));
+  }
+
+  // Accept (guest) or Approve (host) the other player's offer or request
+  function agree(){
     var s = session;
-    if (!s || !s.paired || !game) return;
-    s.nextGame.me = s.nextGame.peer || ui.nextMode.value;
-    send({ t: 'newgame', mode: s.nextGame.me });
-    if (s.nextGame.peer) startNewGame();
-    else say('Asked ' + peer() + ' for a new game of ' + s.nextGame.me + '…');
+    if (!s || !s.paired) return;
+    if (s.host) {
+      if (s.talk.ask) startGame(s.talk.ask);
+      return;
+    }
+    var offer = s.talk.offer;
+    if (!offer) return;
+    s.talk.agreed[offer.id] = offer;
+    s.talk.offer = null;
+    send({ t: 'accept', id: offer.id });
+    say('Accepted. Starting…');
+    showChoices();
+  }
+
+  // Guest: answer the host's offer by asking for it with colours swapped,
+  // or with the other game
+  function counter(change){
+    var offer = session && session.talk.offer;
+    if (!offer || session.host) return;
+    if (change === 'colors') suggest(offer.mode, opposite(offer.hostColor));
+    else suggest(offer.mode === 'chess' ? 'checkers' : 'chess', offer.hostColor);
+  }
+
+  // Decline the other player's offer or request
+  function refuse(){
+    var s = session;
+    if (!s) return;
+    var theirs = s.host ? s.talk.ask : s.talk.offer;
+    if (!theirs) return;
+    send({ t: 'decline', id: theirs.id });
+    if (s.host) s.talk.ask = null;
+    else s.talk.offer = null;
+    say('You said no to the new game.');
+    showChoices();
   }
 
   // The invite puts the code after "#", a part of the link browsers never
@@ -3247,7 +3448,11 @@ var Online = (function () {
   byId('onlineCreate').addEventListener('click', function () { begin('create'); });
   byId('onlineJoin').addEventListener('click', function () { begin('join'); });
   byId('onlineShare').addEventListener('click', share);
-  byId('onlineNewGame').addEventListener('click', newGame);
+  ui.newGame.addEventListener('click', newGame);
+  ui.yes.addEventListener('click', agree);
+  ui.swap.addEventListener('click', function () { counter('colors'); });
+  ui.other.addEventListener('click', function () { counter('game'); });
+  ui.no.addEventListener('click', refuse);
   byId('onlineResign').addEventListener('click', resign);
   byId('onlineReconnect').addEventListener('click', function () {
     if (session) { session.retries = 0; connect(); }

@@ -19,9 +19,11 @@ app from the browser's *Add to Home Screen*).
 3. Tap **Share invite** and send it to your friend (Messages, email, anything).
 4. Your friend opens the link, or types the four words into the four boxes, and
    taps **Join game**.
-5. When a game ends, pick **Chess** or **Checkers** and tap **New game**. Once
-   your friend taps it too, a new game starts in the same room, with colors
-   swapped.
+5. For another game in the same room, whoever created the game (the host)
+   picks the game and their color and taps **Offer new game**. The friend can
+   **Accept**, ask to **Swap colors** or switch to the other game, or
+   **Decline**. If they ask for a change, the host can **Approve** it or offer
+   something else. The friend can also tap **Ask for new game** at any time.
 
 If a screen goes to sleep, the game waits and picks up where it left off.
 

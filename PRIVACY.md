@@ -45,6 +45,7 @@ to guess.
 |---|---|
 | Move your pieces, move twice, or make an illegal move | Your page checks every move against its own rules and ignores anything invalid. |
 | Rewrite the game's history or claim you resigned | Refused. Only your own moves come from you, and a player can only resign for themselves. |
+| Restart a game they're losing | A new game only starts if the other player accepted it or asked for it. |
 | Join a game that already has two players | The relay turns them away. Taking over a player's seat would need their random seat number, which only their own device knows. |
 | Guess secret codes | 20 tries per minute per IP address, against billions of codes. |
 | Send plain text, fake "your friend left" notes, or huge or rapid messages | The relay only forwards encrypted messages and disconnects anyone who floods it. |
