@@ -18,6 +18,7 @@
                    CHESS SECTION .......... drawing the chess board, taps
                    COMPUTER PLAYER ........ how "Chessckers" picks moves
                    CHECKERS SECTION ....... rules, board and computer player
+                   SECRET HINT ............ hold the logo for the best move
                    ONLINE PLAY ............ playing a friend over the internet
                    GLOBAL INITIALIZATION .. what happens when the page opens
 
@@ -136,7 +137,11 @@ header button:hover, .online-panel button:hover{
 header label{color:#a2a2c2;font-size:0.9rem;}
 /* The word after "Skill:" (Easy, Hard, ...) is highlighted in pink */
 #skillLabel{color:#e94560;font-weight:bold;}
-#logo{width:120px;height:120px;border-radius:6px;}
+/* The logo doubles as the secret hint button (see SECRET HINT), so
+   holding it mustn't select it, drag it or pop up iPhone's "Save Image" */
+#logo{width:120px;height:120px;border-radius:6px;
+  -webkit-touch-callout:none;user-select:none;-webkit-user-select:none;}
+#logo.thinking{opacity:0.8;}   /* while a hint is being worked out */
 /* A label and its control stay together when the header wraps */
 .field{display:inline-flex;align-items:center;gap:0.3rem;white-space:nowrap;}
 /* "hidden" settings (e.g. Skill in 2-player mode) take up no space */
@@ -248,6 +253,13 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
 .chessboard .square.legal-move{background:rgba(100,200,100,0.5)!important;}
 /* A yellow outline marks where the last move came from and went to */
 .chessboard .square.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
+/* The secret hint: a pale blue glow on the best move's two squares that
+   fades away over two seconds (chess and checkers) */
+.chessboard .square.hint, table.checkers td.hint{animation:hintfade 2s ease-out forwards;}
+@keyframes hintfade{
+  from{box-shadow:inset 0 0 0 4px rgba(120,220,255,0.9);}
+  to{box-shadow:inset 0 0 0 4px rgba(120,220,255,0);}
+}
 .chessboard .piece{
   font-size:var(--piece);
   line-height:1;
@@ -421,7 +433,8 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
   <header>
     <!-- LOGO: the picture is stored right here in the file as text
          ("base64"), so the game needs no separate image download -->
-    <img id="logo"
+    <!-- (Press and hold it for a secret hint: see SECRET HINT) -->
+    <img id="logo" draggable="false"
          src="data:image/png;base64,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"
          alt="Logo">
 
@@ -1860,6 +1873,7 @@ function minimaxRoot(depth, game, isMax){
 // of, beta = the best Black is already sure of; when they cross
 // (beta <= alpha) the remaining moves can't matter, so it stops early.
 function minimax(depth, game, alpha, beta, isMax){
+  if (outOfTime()) return 0;   // a hint ran out of time (see SECRET HINT)
   // Out of depth, or the game has ended: just score the board as it stands
   if (depth === 0 || game.game_over()){
     return evaluateBoard(game);
@@ -2382,6 +2396,7 @@ function checkersMinimaxRoot(depth, boardState, turn){
 // Scores a position by looking "depth" more moves ahead, switching sides
 // each level, and skipping lines that can't matter (alpha-beta)
 function checkersMinimax(depth, boardState, turn, alpha, beta){
+  if (outOfTime()) return 0;   // a hint ran out of time (see SECRET HINT)
   if (depth === 0) return evaluateCheckers(boardState);
   var moves = generateAllMoves(boardState, turn);
   if (!moves.length) return evaluateCheckers(boardState);
@@ -2481,6 +2496,116 @@ function evaluateCheckers(boardState){
   }
   return score;
 }
+
+/* ==========================================================
+   SECRET HINT – hold the logo for the best move
+   ----------------------------------------------------------
+   Press and hold the cat logo for about a second and the two squares of
+   the best move for whoever's turn it is (where to move from, and where
+   to) glow faintly for two seconds, then fade. A quick tap does nothing.
+   - It uses the same thinking as the computer player (see COMPUTER
+     PLAYER), aiming for the strongest setting, Very Hard, whatever the
+     Skill slider says. Very Hard can take many seconds on a phone, so
+     the hint thinks 1 move ahead, then 2, then 3... up to 5, and stops
+     after 6 seconds, using the deepest answer it finished. The logo
+     dims slightly while it thinks.
+   - It works in every mode, for chess and checkers, but only when it's
+     your turn and you could move.
+   - It's worked out entirely on this device. Nothing is sent anywhere,
+     so in an online game your friend can't tell.
+   ========================================================== */
+var HINT_HOLD_MS = 800;   // how long to hold the logo
+var HINT_DEPTH = 5;       // how many moves ahead at most: the same as Very Hard
+var HINT_TIME_MS = 6000;  // the most time a hint may think
+
+// While a hint is thinking, the time it must stop by (0 the rest of the
+// time, so the computer player is never cut short), and whether it had to
+var hintDeadline = 0;
+var hintTimedOut = false;
+
+// Checked by both searches (minimax and checkersMinimax) at every step.
+// Once a hint's time is up, they stop looking and return straight away.
+function outOfTime(){
+  if (hintDeadline && Date.now() > hintDeadline) hintTimedOut = true;
+  return hintTimedOut;
+}
+
+// Runs search(depth) for depth 1, 2, 3... up to HINT_DEPTH, keeping the
+// answer from the deepest search that finished in time. (A search cut
+// short by the clock is thrown away: it didn't look at every move.)
+function deepestInTime(search){
+  var best = null;
+  hintDeadline = Date.now() + HINT_TIME_MS;
+  for (var depth = 1; depth <= HINT_DEPTH; depth++) {
+    hintTimedOut = false;
+    var move = search(depth);
+    if (hintTimedOut) break;
+    best = move;
+  }
+  hintDeadline = 0;
+  hintTimedOut = false;
+  return best;
+}
+
+// Works out the best move for the side to move and makes its two squares
+// glow. Does nothing if the game is over or it isn't your turn.
+function showHint(){
+  if (modeSelect.value === 'chess') {
+    var turn = chess.turn() === 'w' ? 'white' : 'black';
+    if (chess.game_over() || !localPlayerCanMove(turn)) return;
+    var best = deepestInTime(function (depth) { return minimaxRoot(depth, chess, turn === 'white'); });
+    if (!best) return;
+    // The search gives the move by name ("Nf3"); play it for a moment to
+    // learn its squares, then take it straight back
+    var move = chess.move(best);
+    chess.undo();
+    glow([document.querySelector('[data-square="' + move.from + '"]'),
+          document.querySelector('[data-square="' + move.to + '"]')]);
+  } else {
+    var color = CHECKERS.turn === 1 ? 'white' : 'black';
+    if (checkersGameOverInfo().over || !localPlayerCanMove(color)) return;
+    var m = deepestInTime(function (depth) { return checkersMinimaxRoot(depth, CHECKERS.board, CHECKERS.turn); });
+    if (!m) return;
+    var rows = document.querySelector('table.checkers').rows;
+    glow([rows[m.from.r].cells[m.from.c], rows[m.to.r].cells[m.to.c]]);
+  }
+}
+
+// Gives squares the fading glow (the "hint" style above), then removes it
+function glow(squares){
+  squares.forEach(function (sq) {
+    sq.classList.remove('hint');
+    void sq.offsetWidth;   // lets the glow restart if it's already showing
+    sq.classList.add('hint');
+  });
+  setTimeout(function () {
+    squares.forEach(function (sq) { sq.classList.remove('hint'); });
+  }, 2000);
+}
+
+// Holding the logo: a timer starts when it's pressed, and is cancelled if
+// the finger or mouse lets go (or slides off) before it runs out
+(function () {
+  var logo = document.getElementById('logo');
+  var timer = null;
+  function cancel(){ clearTimeout(timer); timer = null; }
+  logo.addEventListener('pointerdown', function () {
+    cancel();
+    timer = setTimeout(function () {
+      timer = null;
+      // Dim the logo, give the screen a moment to show it, then think
+      logo.classList.add('thinking');
+      setTimeout(function () {
+        try { showHint(); } finally { logo.classList.remove('thinking'); }
+      }, 50);
+    }, HINT_HOLD_MS);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (name) {
+    logo.addEventListener(name, cancel);
+  });
+  // No "Save Image" style menu when holding the logo
+  logo.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+})();
 
 /* ==========================================================
    ONLINE PLAY – two players, one secret code
