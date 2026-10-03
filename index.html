@@ -656,12 +656,14 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
     </div>
     <!-- One line saying what's happening ("Waiting for your friend…").
          role="status" makes screen readers announce it when it changes.
-         Reconnect appears beside it after a dropped connection. -->
+         Reconnect appears beside it after a dropped connection, and "Fix
+         the code" when you joined a room nobody's in (probably a typo). -->
     <div class="online-row">
       <div id="onlineState" class="online-state" role="status">
         Start a new game, or join a friend's with their secret code.
       </div>
       <button id="onlineReconnect" hidden>Reconnect</button>
+      <button id="onlineFix" class="secondary" hidden>Fix the code</button>
     </div>
     <!-- Answers to the other player's new-game offer (or request). The host
          only sees Approve and Decline; the other player sees all four. -->
@@ -3051,6 +3053,7 @@ var Online = (function () {
     create: byId('onlineCreate'), join: byId('onlineJoin'),
     next: byId('onlineNext'), nextMode: byId('onlineNextMode'), nextColor: byId('onlineNextColor'),
     newGame: byId('onlineNewGame'), state: byId('onlineState'), reconnect: byId('onlineReconnect'),
+    fix: byId('onlineFix'),
     reply: byId('onlineReply'), yes: byId('onlineYes'), swap: byId('onlineSwap'),
     other: byId('onlineOther'), no: byId('onlineNo'),
     chat: byId('onlineChat'), chatLog: byId('onlineChatLog'), chatPick: byId('onlineChatPick'),
@@ -3351,10 +3354,18 @@ var Online = (function () {
     s.retries = 0;   // the relay answered, so the connection is healthy again
     if (note === 'waiting') {
       s.paired = false;
+      // We tapped Join but nobody is in this room. The relay can't tell a
+      // typo from a friend who isn't there yet (it never sees the code), so
+      // say what's most likely and offer the fix, but keep waiting.
+      var lonely = !s.peerKnown && !s.host && !s.rejoin;
+      ui.fix.hidden = !lonely;
       say(s.peerKnown ? 'Connected. Waiting for ' + peer() + ' to come back…'
-                      : 'Waiting for your friend… Send them the secret code with Share invite.');
+        : lonely ? "Nobody is in a game with this code. Check the four words with your friend, " +
+                   "or keep waiting: you'll connect as soon as they're in."
+        : 'Waiting for your friend… Send them the secret code with Share invite.');
     } else if (note === 'paired') {
       s.paired = true;
+      ui.fix.hidden = true;
       say('Connected! Saying hello…');
       send({ t: 'hello', v: PROTOCOL, name: s.name, hasGame: !!game });
     } else if (note === 'peer-left') {
@@ -3769,6 +3780,7 @@ var Online = (function () {
       lastChat: 0,                        // when we last sent a chat message
       paired: false, socket: null, pinger: null, lastHeard: 0, retries: 0,
       host: role === 'create' || !!wasHost,   // the host offers new games (see "new games" above)
+      rejoin: wasHost !== undefined,          // rejoining after a reload (see resume)
       talk: newTalk(),           // the new-game conversation
       inbox: Promise.resolve(), outbox: Promise.resolve()
     };
@@ -3805,6 +3817,7 @@ var Online = (function () {
     ui.setup.hidden = false;
     ui.session.hidden = true;
     ui.reconnect.hidden = true;
+    ui.fix.hidden = true;
     ui.chat.hidden = true;
     ui.chatLog.textContent = '';   // forget the chat
     lockSettings(false);
@@ -3923,6 +3936,13 @@ var Online = (function () {
   byId('onlineStartPick').addEventListener('click', function () { chooseRole('create'); });
   byId('onlineJoinPick').addEventListener('click', function () { chooseRole('join'); });
   byId('onlineBack').addEventListener('click', function () { chooseRole(null); });
+  // Fix the code: leave the empty room and go back to the Join boxes,
+  // which still hold the code as typed, ready to correct
+  ui.fix.addEventListener('click', function () {
+    leave();
+    chooseRole('join');
+    ui.words[0].focus();
+  });
   chooseRole(null);   // start on step 1: the Start and Join buttons
   byId('onlineCreate').addEventListener('click', function () { begin('create'); });
   byId('onlineJoin').addEventListener('click', function () { begin('join'); });

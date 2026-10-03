@@ -6,7 +6,7 @@
 
 // The name of the saved copy. Changing the version number makes browsers
 // throw away the old copy and save a fresh one.
-const CACHE_NAME = 'chesshire-cat-v13';
+const CACHE_NAME = 'chesshire-cat-v14';
 // The files to save: the page, the logo, and the app details
 const ASSETS = [
   './',
