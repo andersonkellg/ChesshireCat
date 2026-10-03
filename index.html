@@ -3163,7 +3163,7 @@ var Online = (function () {
     } else if (note === 'paired') {
       s.paired = true;
       say('Connected! Saying hello…');
-      send({ t: 'hello', v: PROTOCOL, name: s.name });
+      send({ t: 'hello', v: PROTOCOL, name: s.name, hasGame: !!game });
     } else if (note === 'peer-left') {
       s.paired = false;
       // Leaving on purpose sends "bye" first; without one, their connection dropped
@@ -3192,6 +3192,15 @@ var Online = (function () {
       : 'Playing with ' + s.peerName + '.');
     s.peerKnown = true;
     s.peerAway = null;
+    // Neither of us has the game (we both reloaded the page at once): the
+    // host starts a fresh one, and the other player waits for it
+    if (!game && !msg.hasGame && !s.host) {
+      say('Waiting for ' + s.peerName + ' to start a new game…');
+    } else if (!game && !msg.hasGame) {
+      game = { mode: modeSelect.value, myColor: playerColor, moves: [], resigned: null };
+      resetBoard(game.mode);
+      say('You both reloaded, so the last game was lost. New game with ' + s.peerName + '!');
+    }
     if (game) sendGame();
     resumeTalks();
     refresh();
@@ -3238,6 +3247,7 @@ var Online = (function () {
     var before = game;
     var next = { mode: msg.mode, myColor: opposite(msg.color), moves: msg.moves, resigned: resigned };
     session.host = msg.host !== true;   // (unchanged if we already had the game: checked above)
+    remember();
     if (rebuild(next, before ? before.moves.length : next.moves.length)) {
       say('Playing with ' + peer() + '. You are ' + game.myColor + '.');
     } else {
@@ -3270,6 +3280,46 @@ var Online = (function () {
     if (!game || isOver()) return;
     game.resigned = opposite(game.myColor);
     refresh();
+  }
+
+  /* -- coming back after a reload --
+     Reloading the page would normally drop you out of the game. So while
+     you're in one, this tab remembers just three things: the secret code,
+     your name, and whether you're the host. Not the moves and not the chat:
+     the other player's page sends the game back when you rejoin.
+     "sessionStorage" belongs to this one tab. It isn't synced or kept in
+     your history, and the browser wipes it when the tab closes. Leave
+     wipes it straight away. */
+  var REMEMBER = 'chesshire-online';
+
+  // Saves (or updates) the three things above for this tab
+  function remember(){
+    if (!session) return;
+    try {
+      sessionStorage.setItem(REMEMBER, JSON.stringify(
+        { code: session.code, name: session.name, host: session.host }));
+    } catch (e) {}   // private browsing may refuse: then a reload just starts over
+  }
+
+  // Forgets them
+  function forget(){
+    try { sessionStorage.removeItem(REMEMBER); } catch (e) {}
+  }
+
+  // When the page opens: if this tab was in an online game, rejoin it
+  function resume(){
+    var saved;
+    try { saved = JSON.parse(sessionStorage.getItem(REMEMBER)); } catch (e) { return; }
+    if (!saved || typeof saved.code !== 'string' || session) return;
+    opponentSelect.value = 'online';
+    opponentMode = 'online';
+    updateColorSelectorVisibility();
+    show(true);
+    fillCode(saved.code);
+    ui.name.value = cleanName(saved.name);
+    // Always rejoin as the guest: the other player's page still has the
+    // game and sends it back, along with who the host is
+    begin('join', saved.host === true);
   }
 
   /* -- chat --
@@ -3492,7 +3542,8 @@ var Online = (function () {
 
   // Create game / Join game: checks the code, turns it into a room ID and
   // key, sets up the session and connects. role is 'create' or 'join'.
-  async function begin(role){
+  // "wasHost" is only set when rejoining after a reload (see resume)
+  async function begin(role, wasHost){
     if (session || busy) return;
     if (!window.crypto || !crypto.subtle || !window.WebSocket) {
       say('Online play needs a modern browser and a secure (https) page.');
@@ -3526,7 +3577,7 @@ var Online = (function () {
       peerKnown: false, peerAway: null,   // peerAway: null, 'dropped' or 'left'
       lastChat: 0,                        // when we last sent a chat message
       paired: false, socket: null, pinger: null, lastHeard: 0, retries: 0,
-      host: role === 'create',   // the host offers new games (see "new games" above)
+      host: role === 'create' || !!wasHost,   // the host offers new games (see "new games" above)
       talk: newTalk(),           // the new-game conversation
       inbox: Promise.resolve(), outbox: Promise.resolve()
     };
@@ -3536,6 +3587,7 @@ var Online = (function () {
     ui.session.hidden = false;
     ui.chat.hidden = false;
     showChat();
+    remember();
 
     if (role === 'create') {
       game = { mode: modeSelect.value, myColor: playerColor, moves: [], resigned: null };
@@ -3545,6 +3597,7 @@ var Online = (function () {
       initGame();
     }
     connect();
+    if (wasHost !== undefined) say('Rejoining your game…');
   }
 
   // Leave: tells the other player, closes the connection and forgets
@@ -3552,6 +3605,7 @@ var Online = (function () {
   function leave(){
     if (!session) return;
     var s = session;
+    forget();
     send({ t: 'bye' });   // so they see "left the game", not "connection dropped"
     session = null;
     game = null;
@@ -3643,6 +3697,7 @@ var Online = (function () {
     var match = location.hash.match(/^#join=(.+)$/);
     if (!match || session) return;
     history.replaceState(null, '', location.href.split('#')[0]);
+    forget();   // a new invite replaces any game this tab remembered
     try { fillCode(decodeURIComponent(match[1])); } catch (e) { return; }
     opponentSelect.value = 'online';
     opponentMode = 'online';
@@ -3712,6 +3767,7 @@ var Online = (function () {
   return {
     show: show,
     readInvite: readInvite,
+    resume: resume,
     // Our colour in the online game (or the "Play as" choice before one starts)
     myColor: function () { return game ? game.myColor : playerColor; },
     peerName: peer,
@@ -3769,9 +3825,11 @@ function initGame(){
   }
 }
 // When the page opens: if it was opened from an invite link, fill in the
-// code; show the online panel if "Online friend" is selected; draw a
-// fresh board; and make the New Game button start a new game.
+// code, or if this tab was in an online game before a reload, rejoin it;
+// show the online panel if "Online friend" is selected; draw a fresh
+// board; and make the New Game button start a new game.
 Online.readInvite();
+Online.resume();
 Online.show(opponentMode === 'online');
 initGame();
 newGameBtn.addEventListener('click', initGame);

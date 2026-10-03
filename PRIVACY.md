@@ -13,8 +13,9 @@ check it yourself.
   chat message is encrypted on your device** before it leaves.
 - A tiny relay passes the encrypted messages between the two of you. It can't
   read them, it never sees the secret code, and **it stores nothing**.
-- When you leave, the game and the chat are gone. No accounts, no history, no analytics, no
-  cookies.
+- When you leave, the game and the chat are gone. No accounts, no history,
+  no analytics, no cookies. (While you're in a game, the tab remembers the
+  secret code so a reload can rejoin; see below.)
 
 ## Who can see what
 
@@ -60,6 +61,12 @@ to guess.
   logs or stores them, and logging is switched off in `relay/wrangler.toml`.
   Cloudflare's own network may keep standard traffic records; that's outside
   this project's control.
+- **The tab remembers the secret code while you play.** So that reloading
+  the page puts you back in your game, the tab keeps the secret code, your
+  name, and whether you're the host in the browser's `sessionStorage`. Never
+  the moves or the chat: your friend's page sends the game back. It belongs
+  to that tab only, isn't synced or saved in your history, and is wiped when
+  you tap Leave or close the tab.
 - **Anyone who has your secret code can join.** Only send it to your friend.
   If a stranger gets it, just Leave and make a new one.
 - **Homemade codes are weaker.** The 🎲 button makes strong ones; typed codes
