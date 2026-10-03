@@ -368,6 +368,13 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 /* Less important buttons (Share, Resign, Leave) are dark with a pink edge */
 .online-panel button.secondary{background:#0f3460;border:1px solid #e94560;}
 .online-panel button:disabled{opacity:0.5;cursor:default;transform:none;box-shadow:none;}
+/* Chat: a thin line above it, recent messages, then the buttons and box */
+.online-chat{display:flex;flex-direction:column;gap:0.4rem;border-top:1px solid #0f3460;padding-top:0.5rem;}
+.chat-log{list-style:none;margin:0;padding:0;overflow-wrap:anywhere;}
+.chat-log:empty{display:none;}
+.chat-log b{color:#a2a2c2;}
+#onlineChatTyped{flex:1 1 14rem;}
+#onlineChatText{flex:1 1 8rem;min-width:0;}
 /* The orange status line in the online panel ("Waiting for your friend…") */
 .online-state{color:#f39422;font-weight:bold;}
 /* The note at the very bottom about encryption and the relay */
@@ -540,6 +547,21 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
       <button id="onlineOther" class="secondary">Checkers instead</button>
       <button id="onlineNo" class="secondary">Decline</button>
     </div>
+    <!-- Chat with your friend: the last few messages, and a menu of
+         ready-made phrases (see CHAT_PHRASES) that sends as soon as you pick
+         one. The typing box stays hidden unless FREE_CHAT is turned on.
+         Chat is encrypted exactly like moves and only works while you're
+         both connected. Nothing is saved: it's gone when you leave. -->
+    <div id="onlineChat" class="online-chat" hidden>
+      <ol id="onlineChatLog" class="chat-log" role="log"></ol>
+      <div class="online-row">
+        <select id="onlineChatPick" aria-label="Send a chat message"></select>
+        <span id="onlineChatTyped" class="online-row" hidden>
+          <input id="onlineChatText" maxlength="50" autocomplete="off" enterkeyhint="send" aria-label="Chat message">
+          <button id="onlineChatSend">Send</button>
+        </span>
+      </div>
+    </div>
   </section>
 
   <!-- The middle of the page: one board at a time -->
@@ -580,7 +602,7 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
   <!-- Bottom note in online mode: what's protected, and which relay
        (the only server this page may talk to) is being used -->
   <footer id="onlineNote" class="online-note" hidden>
-    Moves are encrypted on this device with the secret code before they are sent.
+    Moves and chat are encrypted on this device with the secret code before they are sent.
     The relay only passes scrambled messages along and keeps nothing.
     <a href="https://github.com/andersonkellg/ChesshireCat/blob/main/PRIVACY.md" target="_blank" rel="noopener">How it works</a>
     · Relay: <code id="onlineRelay"></code>
@@ -2618,6 +2640,8 @@ function glow(squares){
       scrambled messages along. It can't read them and it stores nothing.
    5. Every incoming move is checked against this page's own rules, so an
       impossible, out-of-turn or tampered move is simply ignored.
+   6. Chat messages travel the same way as moves, so they're encrypted
+      too, and they're only ever shown as plain text.
    The plain-English version is in PRIVACY.md.
 
    A few words used below:
@@ -2824,10 +2848,22 @@ function moveKey(mode, m){
    the rest of the page can only use the few functions listed in the
    "return { ... }" at the very end. */
 var Online = (function () {
-  var PROTOCOL = 4;        // bump if the message format or the rules change
+  var PROTOCOL = 5;        // bump if the message format or the rules change
   var MAX_MOVES = 2000;    // longest game history we'll accept from the other player
   var PING_MS = 20000;     // keep-alive; the relay frees seats silent for a minute
   var MODES = ['chess', 'checkers'];
+  var CHAT_LINES = 4;      // how many recent chat messages stay on screen
+  // The chat menu. With FREE_CHAT off, these are the ONLY messages this
+  // page will send or show: anything else from the other player is
+  // ignored, even if their copy of the page was changed.
+  var CHAT_PHRASES = [
+    'Hi!', 'Be right back', "I'm back", 'Thinking…', 'Your move', 'Good move!',
+    'Oops!', 'Nice try', 'Good game', 'Rematch?', 'Thanks!', 'Bye!'
+  ];
+  // true also shows a box for typing your own message (CHAT_CHARS at most)
+  // and shows the other player's typed messages
+  var FREE_CHAT = false;
+  var CHAT_CHARS = 50;
 
   // Handles on the online panel's controls (see the HTML at the top)
   var ui = {
@@ -2837,7 +2873,9 @@ var Online = (function () {
     next: byId('onlineNext'), nextMode: byId('onlineNextMode'), nextColor: byId('onlineNextColor'),
     newGame: byId('onlineNewGame'), state: byId('onlineState'), reconnect: byId('onlineReconnect'),
     reply: byId('onlineReply'), yes: byId('onlineYes'), swap: byId('onlineSwap'),
-    other: byId('onlineOther'), no: byId('onlineNo')
+    other: byId('onlineOther'), no: byId('onlineNo'),
+    chat: byId('onlineChat'), chatLog: byId('onlineChatLog'), chatPick: byId('onlineChatPick'),
+    chatTyped: byId('onlineChatTyped'), chatText: byId('onlineChatText'), chatSend: byId('onlineChatSend')
   };
 
   var session = null;  // the connection and the two players; null when not online
@@ -2851,13 +2889,17 @@ var Online = (function () {
   function opposite(color){ return color === 'white' ? 'black' : 'white'; }
   function peer(){ return session ? session.peerName : 'your friend'; }
 
-  // Names come from the other player: keep them short and strip invisible
-  // control and text-direction characters. They're only ever shown as text.
-  function cleanName(text){
-    return String(text || '')
+  // Names and chat come from the other player: keep them short and strip
+  // invisible control and text-direction characters. They're only ever
+  // shown as text. (Array.from counts an emoji as one character, so
+  // cutting the text short never breaks one in half.)
+  function cleanText(text, max){
+    var clean = String(text || '')
       .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, '')
-      .trim().slice(0, 20);
+      .trim();
+    return Array.from(clean).slice(0, max).join('').trim();
   }
+  function cleanName(text){ return cleanText(text, 20); }
 
   // Greys out the top-bar settings during an online game, so neither
   // player can change the game type or reset the board on their own
@@ -2945,6 +2987,7 @@ var Online = (function () {
       updateCheckersStatus();
     }
     showChoices();
+    showChat();
   }
 
   // Plays a move only if it exactly matches one of the legal moves right now.
@@ -3103,6 +3146,7 @@ var Online = (function () {
       case 'decline': onDecline(msg); break;
       case 'start':   onStart(msg); break;
       case 'bye':     onBye(); break;
+      case 'chat':    onChat(msg); break;
     }
   }
 
@@ -3226,6 +3270,63 @@ var Online = (function () {
     if (!game || isOver()) return;
     game.resigned = opposite(game.myColor);
     refresh();
+  }
+
+  /* -- chat --
+     Short messages between the two players, like "Be right back", picked
+     from CHAT_PHRASES. They go through send() just like moves, so they're
+     encrypted the same way and the relay can't read them. Only the last
+     few stay on screen, and nothing is kept after you leave. */
+
+  // Is this a message we allow? Only the menu phrases, unless FREE_CHAT is on
+  function allowedChat(text){
+    return !!text && (FREE_CHAT || CHAT_PHRASES.indexOf(text) >= 0);
+  }
+
+  // Sends a chat message. Returns true if it went. Only while both players
+  // are connected (otherwise it would be lost), and at most one a second
+  // (the relay disconnects anyone who sends too much).
+  function chat(text){
+    var s = session;
+    text = cleanText(text, CHAT_CHARS);
+    if (!s || !s.paired || !allowedChat(text) || Date.now() - s.lastChat < 1000) return false;
+    s.lastChat = Date.now();
+    send({ t: 'chat', text: text });
+    addChat('You', text);
+    return true;
+  }
+
+  // "chat": a message from the other player
+  function onChat(msg){
+    if (typeof msg.text !== 'string') return;
+    var text = cleanText(msg.text, CHAT_CHARS);
+    if (allowedChat(text)) addChat(peer(), text);
+  }
+
+  // Adds one line to the chat on screen ("Sam: Be right back"), dropping
+  // the oldest past CHAT_LINES. textContent and createTextNode show the
+  // message as plain text, never as part of the page.
+  function addChat(who, text){
+    var line = document.createElement('li');
+    var name = document.createElement('b');
+    name.textContent = who + ': ';
+    line.appendChild(name);
+    line.appendChild(document.createTextNode(text));
+    ui.chatLog.appendChild(line);
+    while (ui.chatLog.children.length > CHAT_LINES) ui.chatLog.removeChild(ui.chatLog.firstChild);
+  }
+
+  // The chat menu and box only work while both players are connected
+  function showChat(){
+    var on = !!(session && session.paired);
+    ui.chatPick.disabled = ui.chatText.disabled = ui.chatSend.disabled = !on;
+    ui.chatPick.options[0].textContent = on ? 'Say…' : "Chat works while you're both connected";
+    ui.chatText.placeholder = 'Or type a few words';
+  }
+
+  // Sends what's typed in the box, and empties it if it went
+  function chatTyped(){
+    if (chat(ui.chatText.value)) ui.chatText.value = '';
   }
 
   /* -- new games: the host offers, the other player answers --
@@ -3423,6 +3524,7 @@ var Online = (function () {
       seat: toHex(crypto.getRandomValues(new Uint8Array(16))),  // our seat at the relay (see connect)
       seq: 0, peerTag: null, peerSeq: 0, peerName: 'your friend',
       peerKnown: false, peerAway: null,   // peerAway: null, 'dropped' or 'left'
+      lastChat: 0,                        // when we last sent a chat message
       paired: false, socket: null, pinger: null, lastHeard: 0, retries: 0,
       host: role === 'create',   // the host offers new games (see "new games" above)
       talk: newTalk(),           // the new-game conversation
@@ -3432,6 +3534,8 @@ var Online = (function () {
     ui.codeShown.textContent = code;
     ui.setup.hidden = true;
     ui.session.hidden = false;
+    ui.chat.hidden = false;
+    showChat();
 
     if (role === 'create') {
       game = { mode: modeSelect.value, myColor: playerColor, moves: [], resigned: null };
@@ -3456,6 +3560,8 @@ var Online = (function () {
     ui.setup.hidden = false;
     ui.session.hidden = true;
     ui.reconnect.hidden = true;
+    ui.chat.hidden = true;
+    ui.chatLog.textContent = '';   // forget the chat
     lockSettings(false);
     showChoices();
     say('You left the game. Nothing about it was saved.');
@@ -3583,6 +3689,22 @@ var Online = (function () {
     if (session) { session.retries = 0; connect(); }
   });
   byId('onlineLeave').addEventListener('click', leave);
+  // Fill the chat menu: a "Say…" heading, then one choice per phrase.
+  // Picking one sends it, then the menu goes back to "Say…".
+  [''].concat(CHAT_PHRASES).forEach(function (phrase) {
+    var option = document.createElement('option');
+    option.value = option.textContent = phrase;
+    ui.chatPick.appendChild(option);
+  });
+  ui.chatPick.addEventListener('change', function () {
+    chat(ui.chatPick.value);
+    ui.chatPick.selectedIndex = 0;
+  });
+  ui.chatTyped.hidden = !FREE_CHAT;
+  ui.chatSend.addEventListener('click', chatTyped);
+  ui.chatText.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); chatTyped(); }
+  });
   byId('onlineRelay').textContent = RELAY_URL.replace(/^wss:\/\//, '');
 
   // The parts of "Online" the rest of the page may use. Everything else

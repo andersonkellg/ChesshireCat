@@ -9,19 +9,19 @@ check it yourself.
 
 - You and your friend share a **secret code** (four random words, like
   `velvet-otter-lantern-maple`).
-- Your browser turns that code into an encryption key. **Every move is
-  encrypted on your device** before it leaves.
+- Your browser turns that code into an encryption key. **Every move and
+  chat message is encrypted on your device** before it leaves.
 - A tiny relay passes the encrypted messages between the two of you. It can't
   read them, it never sees the secret code, and **it stores nothing**.
-- When you leave, the game is gone. No accounts, no history, no analytics, no
+- When you leave, the game and the chat are gone. No accounts, no history, no analytics, no
   cookies.
 
 ## Who can see what
 
 | Who | Can see | Can't see |
 |---|---|---|
-| **Your friend** | Your name, your moves | Your IP address, anything else on your device |
-| **The relay** (Cloudflare) | That *a* room is in use, when, the IP addresses connecting to it, and a random seat number per player (so a reconnecting phone gets its own seat back) | Names, moves, the secret code, which game you're playing |
+| **Your friend** | Your name, your moves, your chat messages | Your IP address, anything else on your device |
+| **The relay** (Cloudflare) | That *a* room is in use, when, the IP addresses connecting to it, and a random seat number per player (so a reconnecting phone gets its own seat back) | Names, moves, chat messages, the secret code, which game you're playing |
 | **GitHub** (hosts the page) | That someone loaded the page | Anything about games |
 | **Anyone else** | Nothing | Everything |
 
@@ -50,6 +50,7 @@ to guess.
 | Guess secret codes | 20 tries per minute per IP address, against billions of codes. |
 | Send plain text, fake "your friend left" notes, or huge or rapid messages | The relay only forwards encrypted messages and disconnects anyone who floods it. |
 | Use a name with HTML or invisible characters | Names are cut to 20 characters, cleaned, and only ever shown as plain text. |
+| Send a chat message that isn't on the menu | Ignored. Your page only shows its own list of ready-made phrases, even if your friend's copy of the page was changed. |
 | Replay old messages | Each message carries a sequence number, and old ones are dropped. |
 | Point your page at a different server | The page's security policy only allows connecting to the one relay listed in `index.html`. |
 
@@ -64,14 +65,14 @@ to guess.
 - **Homemade codes are weaker.** The 🎲 button makes strong ones; typed codes
   must be four words with at least 12 letters in total.
 - **You trust the page you load.** If the hosted page were ever altered, it
-  could leak moves. See "Check it yourself" below.
+  could leak moves and chat. See "Check it yourself" below.
 
 ## Check it yourself
 
 Everything is in two small places:
 
 - `index.html`: search for **ONLINE PLAY**. That section is the entire online
-  feature: secret codes, encryption, connection, and move checking.
+  feature: secret codes, encryption, connection, move checking, and chat.
 - `relay/worker.js`: the whole relay, under 200 lines including comments.
 
 Quick checks anyone can do:

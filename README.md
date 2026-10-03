@@ -25,9 +25,14 @@ app from the browser's *Add to Home Screen*).
    **Decline**. If they ask for a change, the host can **Approve** it or offer
    something else. The friend can also tap **Ask for new game** at any time.
 
+While you're both connected you can chat by picking a ready-made phrase
+like **Be right back** or **Rematch?** from the **Say…** menu. There's no
+typing, so there's nothing to keep an eye on. The last few messages stay on
+screen, and the chat is forgotten when you leave.
+
 If a screen goes to sleep, the game waits and picks up where it left off.
 
-Moves are encrypted on your device with the secret code. The relay in the
+Moves and chat are encrypted on your device with the secret code. The relay in the
 middle only passes scrambled messages along and keeps nothing. The details,
 and how to check them yourself, are in [PRIVACY.md](PRIVACY.md).
 
