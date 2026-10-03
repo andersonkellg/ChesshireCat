@@ -147,6 +147,27 @@ header label{color:#a2a2c2;font-size:0.9rem;}
    settings acts as if it weren't there ("display:contents"). */
 .menu-summary, .menu-toggle{display:none;}
 .menu-items{display:contents;}
+/* Computers: the board grows to fill the space left in the middle of the
+   window. "container-type" lets sizes inside <main> be measured against
+   <main> itself: 100cqw and 100cqh are its full width and height. 96 and
+   210 pixels are left for the rank and file labels, the board's frame and
+   the status lines below; 300 to 960 pixels keeps it sensible on tiny
+   windows and huge monitors. Only on computer-sized screens with a mouse,
+   so it never fights the phone and tablet sizes further down. */
+@media (min-width: 1025px) and (pointer: fine){
+  main{container-type:size;}
+  /* Set on #app (inside <main>'s parent) so the cq sizes are measured
+     where the board uses them. The square and piece sizes are worked out
+     again from the new board size. */
+  #app{
+    --board: max(300px, min(960px, calc(100cqw - 96px), calc(100cqh - 210px)));
+    --square: calc(var(--board) / 8);
+    --piece: calc(var(--square) * 0.71);
+  }
+  /* More room for the board: a smaller logo, and only the last two chat messages */
+  #logo{width:64px;height:64px;}
+  .chat-log li:nth-last-child(n+3){display:none;}
+}
 /* A label and its control stay together when the header wraps */
 .field{display:inline-flex;align-items:center;gap:0.3rem;white-space:nowrap;}
 /* "hidden" settings (e.g. Skill in 2-player mode) take up no space */
