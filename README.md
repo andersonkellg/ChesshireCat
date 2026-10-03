@@ -14,12 +14,13 @@ app from the browser's *Add to Home Screen*).
 
 ## Playing online with a friend
 
-1. Choose **Opponent → Online friend**, pick the game and your color.
-2. Tap 🎲 for a four-word secret code, then **Create game**.
-3. Tap **Share invite** and send it to your friend (Messages, email, anything).
-4. Your friend opens the link, or types the four words into the four boxes, and
-   taps **Join game**.
-5. For another game in the same room, whoever created the game (the host)
+1. Tap **Online** (on a phone or tablet it's at the top of the **☰ Menu**),
+   then **Start a game**. Type your name, pick the game and your color, and
+   tap **Create game**. The page makes a four-word secret code for you.
+2. Tap **Share invite** and send it to your friend (Messages, email, anything).
+3. Your friend opens the link, or taps **Online → Join a game** and types the
+   four words into the four boxes, then taps **Join game**.
+4. For another game in the same room, whoever created the game (the host)
    picks the game and their color and taps **Offer new game**. The friend can
    **Accept**, ask to **Swap colors** or switch to the other game, or
    **Decline**. If they ask for a change, the host can **Approve** it or offer

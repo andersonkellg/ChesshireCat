@@ -2,7 +2,7 @@
 
 Chesshire Cat is one web page (`index.html`). Playing against the computer or
 with two people on one screen never touches the internet at all. This page
-explains **Online friend** mode: what is protected, what isn't, and how to
+explains **Online** play: what is protected, what isn't, and how to
 check it yourself.
 
 ## The short version
@@ -69,7 +69,8 @@ to guess.
   you tap Leave or close the tab.
 - **Anyone who has your secret code can join.** Only send it to your friend.
   If a stranger gets it, just Leave and make a new one.
-- **Homemade codes are weaker.** The 🎲 button makes strong ones; typed codes
+- **Codes are always made for you.** **Start a game** picks four random
+  words, so there are no weak homemade codes. Typed codes (when joining)
   must be four words with at least 12 letters in total.
 - **You trust the page you load.** If the hosted page were ever altered, it
   could leak moves and chat. See "Check it yourself" below.

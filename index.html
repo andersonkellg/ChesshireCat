@@ -147,6 +147,16 @@ header label{color:#a2a2c2;font-size:0.9rem;}
    settings acts as if it weren't there ("display:contents"). */
 .menu-summary, .menu-toggle{display:none;}
 .menu-items{display:contents;}
+/* "Play here | Online": two joined buttons; the chosen one is pink, the
+   other dark blue */
+.place-switch{display:inline-flex;}
+.place-switch button{border-radius:0;}
+.place-switch button:first-child{border-radius:4px 0 0 4px;}
+.place-switch button:last-child{border-radius:0 4px 4px 0;}
+.place-switch button[aria-pressed="false"]{background:#0f3460;border:1px solid #e94560;}
+.place-switch button:disabled{opacity:0.5;cursor:default;transform:none;box-shadow:none;}
+/* While Online is chosen, the play-here settings are hidden */
+#app.online-mode .offline-only{display:none;}
 /* Computers: the board grows to fill the space left in the middle of the
    window. "container-type" lets sizes inside <main> be measured against
    <main> itself: 100cqw and 100cqh are its full width and height. 96 and
@@ -380,6 +390,8 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 /* Parts marked "hidden" take up no space. (Needed because the rules
    here give those parts a display style that would otherwise win.) */
 .online-panel[hidden], .online-panel [hidden]{display:none;}
+/* Before an online game: the Start/Join choice, then its fields */
+.online-setup{display:flex;flex-direction:column;gap:0.5rem;}
 /* A row of controls that wraps onto the next line when it runs out of room */
 .online-row{display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;}
 /* Text boxes and menus in the online panel */
@@ -468,8 +480,10 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
   .field{flex-direction:column;align-items:stretch;gap:2px;min-width:0;}
   .field label{font-size:0.8rem;}
   header select, header input[type="range"]{margin-left:0;width:100%;min-width:0;box-sizing:border-box;}
-  /* The New Game button stretches across both columns */
-  #newGame{grid-column:1 / -1;}
+  /* The New Game button and the Play here | Online switch stretch across
+     both columns */
+  #newGame, .place-switch{grid-column:1 / -1;}
+  .place-switch button{flex:1;}
   /* Only the last two chat messages, to leave room for the board */
   .chat-log li:nth-last-child(n+3){display:none;}
 }
@@ -520,26 +534,33 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
     <!-- The settings. On phones and tablets they only show while the
          menu is open. -->
     <div id="menuItems" class="menu-items">
+    <!-- Where you play: on this device (against the computer or a second
+         person), or online with a friend. "Online" swaps the settings
+         below for the online panel (see setPlace). -->
+    <span id="placeSwitch" class="place-switch" role="group" aria-label="Where to play">
+      <button id="placeHere" aria-pressed="true">Play here</button>
+      <button id="placeOnline" aria-pressed="false">Online</button>
+    </span>
+    <!-- The settings marked "offline-only" are hidden while Online is chosen -->
     <!-- Which game: chess or checkers -->
-    <span class="field">
+    <span class="field offline-only">
       <label for="mode">Mode:</label>
       <select id="mode">
         <option value="chess">Chess</option>
         <option value="checkers">Checkers</option>
       </select>
     </span>
-    <!-- Who you play: the computer ("Chessckers"), a second person on
-         this same screen, or a friend over the internet -->
-    <span class="field">
+    <!-- Who you play: the computer ("Chessckers") or a second person on
+         this same screen -->
+    <span class="field offline-only">
       <label for="opponent">Opponent:</label>
       <select id="opponent">
         <option value="computer">Chessckers</option>
         <option value="human">2 Players</option>
-        <option value="online">Online friend</option>
       </select>
     </span>
-    <!-- Your colour (against the computer, or when creating an online game) -->
-    <span class="field" id="colorField">
+    <!-- Your colour against the computer -->
+    <span class="field offline-only" id="colorField">
       <label for="playerColor">Play as:</label>
       <select id="playerColor">
         <option value="white">White</option>
@@ -548,13 +569,13 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
     </span>
     <!-- How hard the computer tries: 1 (Very Easy) to 5 (Very Hard). This
          is how many moves ahead it thinks; see "COMPUTER PLAYER" below. -->
-    <span class="field" id="skillField">
+    <span class="field offline-only" id="skillField">
       <label for="skill">Skill: <span id="skillLabel">Easy</span></label>
       <input type="range" id="skill" min="1" max="5" value="2">
     </span>
     <!-- Only in 2-player mode: whether the board turns around for Black's
          turn (handy when passing one device back and forth) -->
-    <span class="field" id="boardTurnField" hidden>
+    <span class="field offline-only" id="boardTurnField" hidden>
       <label for="boardTurn">Board:</label>
       <select id="boardTurn">
         <option value="fixed">Stays put</option>
@@ -562,31 +583,54 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
       </select>
     </span>
     <!-- Starts the current game over from the beginning -->
-    <button id="newGame">New Game</button>
+    <button id="newGame" class="offline-only">New Game</button>
     </div>
   </header>
 
-  <!-- ---------- Online play (shown only for "Online friend") ----------
-       Two versions of the controls: "onlineSetup" before a game (name,
-       secret code, Create/Join) and "onlineSession" during one. -->
+  <!-- ---------- Online play (shown only when "Online" is chosen) ----------
+       Before a game, "onlineSetup": first a choice of Start or Join, then
+       the fields for that choice. During a game, "onlineSession". -->
   <section id="onlinePanel" class="online-panel" hidden>
-    <div id="onlineSetup" class="online-row">
+    <div id="onlineSetup" class="online-setup">
+      <!-- Step 1: start a new game, or join a friend's -->
+      <div id="onlineChoose" class="online-row">
+        <button id="onlineStartPick">Start a game</button>
+        <button id="onlineJoinPick">Join a game</button>
+      </div>
+      <!-- Step 2: the fields for that choice. Start shows the game and
+           colour pickers and Create; Join shows the code boxes and Join. -->
+      <div id="onlineForm" class="online-row" hidden>
       <!-- Your name, as your friend will see it (20 characters at most) -->
       <input id="onlineName" maxlength="20" placeholder="Your name" autocomplete="off">
-      <!-- One box per word; spaces, dashes and capitals are handled for you.
-           The extra settings on each box tell phone keyboards not to
-           capitalise, autocorrect or spell-check, and to show a "next" key. -->
+      <!-- Start only: which game, and your colour. The secret code is made
+           for you when you tap Create game. -->
+      <span id="onlineStartFields" class="online-next">
+        <select id="onlineStartMode" aria-label="Game">
+          <option value="chess">Chess</option>
+          <option value="checkers">Checkers</option>
+        </select>
+        <select id="onlineStartColor" aria-label="Your colour">
+          <option value="white">as White</option>
+          <option value="black">as Black</option>
+        </select>
+      </span>
+      <!-- Join only: one box per word of your friend's secret code; spaces,
+           dashes and capitals are handled for you. Each box takes up to 60
+           characters so a whole pasted code fits before it's spread out. The extra settings on
+           each box tell phone keyboards not to capitalise, autocorrect or
+           spell-check, and to show a "next" key. -->
       <div id="onlineCode" class="code-words">
-        <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="secret" aria-label="Secret code, word 1"><span>-</span>
-        <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="code" aria-label="Secret code, word 2"><span>-</span>
-        <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="four" aria-label="Secret code, word 3"><span>-</span>
-        <input maxlength="20" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="words" aria-label="Secret code, word 4">
+        <input maxlength="60" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="secret" aria-label="Secret code, word 1"><span>-</span>
+        <input maxlength="60" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="code" aria-label="Secret code, word 2"><span>-</span>
+        <input maxlength="60" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="four" aria-label="Secret code, word 3"><span>-</span>
+        <input maxlength="60" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="words" aria-label="Secret code, word 4">
       </div>
-      <!-- 🎲 fills the boxes with four random words; Create starts a new
-           game with that code; Join enters a friend's game with their code -->
-      <button id="onlineDice" class="secondary" title="Make a new random secret code">🎲</button>
+      <!-- Create starts a new game with a fresh secret code; Join enters a
+           friend's game with their code; Back returns to step 1 -->
       <button id="onlineCreate">Create game</button>
       <button id="onlineJoin">Join game</button>
+      <button id="onlineBack" class="secondary">‹ Back</button>
+      </div>
     </div>
     <!-- During a game: the code, plus buttons to invite, propose a new
          game, resign or leave. On phones and tablets this row is part of
@@ -615,7 +659,7 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
          Reconnect appears beside it after a dropped connection. -->
     <div class="online-row">
       <div id="onlineState" class="online-state" role="status">
-        Tap 🎲 and Create a game, or type your friend's secret code and Join.
+        Start a new game, or join a friend's with their secret code.
       </div>
       <button id="onlineReconnect" hidden>Reconnect</button>
     </div>
@@ -1519,7 +1563,7 @@ menuToggle.addEventListener('click', function () {
 // It folds away again after tapping a button in it (New Game, Share,
 // Leave, ...) or tapping the board
 document.addEventListener('click', function (e) {
-  if (e.target.closest('#menuItems button, #onlineSession button')) setMenu(false);
+  if (e.target.closest('#menuItems button, #onlineSession button')) setMenu(false);   // includes Play here / Online
 });
 document.querySelector('main').addEventListener('pointerdown', function () { setMenu(false); });
 
@@ -1528,14 +1572,15 @@ document.querySelector('main').addEventListener('pointerdown', function () { set
 // react to the menus (setSkillLabel, updateColorSelectorVisibility, showTab).
 function updateMenuSummary(){
   var label = function (select) { return select.options[select.selectedIndex].textContent; };
-  var text = label(modeSelect) + ' · ' + label(opponentSelect);
-  if (opponentSelect.value === 'computer') text += ' (' + skillLabel.textContent + ')';
+  var text = label(modeSelect) + ' · ' + (opponentMode === 'online' ? 'Online' : label(opponentSelect));
+  if (opponentMode === 'computer') text += ' (' + skillLabel.textContent + ')';
   menuSummary.textContent = text;
 }
 
 // The current settings: who you're playing ('computer', 'human' for two
 // people on one screen, or 'online') and your colour ('white'/'black').
-// Default to "computer" if for some reason the element isn't found yet
+// Default to "computer" if for some reason the element isn't found yet.
+// ('online' is set by the Play here | Online switch, see setPlace.)
 var opponentMode = opponentSelect ? opponentSelect.value : 'computer';
 var playerColor = playerColorSelect ? playerColorSelect.value : 'white';
 
@@ -1628,16 +1673,33 @@ modeSelect.addEventListener('change', function () {
   showTab(modeSelect.value);
 });
 
-// ...the Opponent menu (also shows or hides the online panel)...
+// ...the Opponent menu...
 // Only attach the listener if the element actually exists
 if (opponentSelect) {
   opponentSelect.addEventListener('change', function () {
     opponentMode = opponentSelect ? opponentSelect.value : 'computer';
     updateColorSelectorVisibility();
-    Online.show(opponentMode === 'online');
     initGame();
   });
 }
+
+// ...and the "Play here | Online" switch. Online hides the play-here
+// settings (the "offline-only" ones) and shows the online panel; Play here
+// goes back to the Opponent menu's choice. "quiet" skips starting a fresh
+// board (used while the page is still opening).
+var placeHereBtn = document.getElementById('placeHere');
+var placeOnlineBtn = document.getElementById('placeOnline');
+function setPlace(online, quiet){
+  opponentMode = online ? 'online' : opponentSelect.value;
+  appEl.classList.toggle('online-mode', online);
+  placeHereBtn.setAttribute('aria-pressed', online ? 'false' : 'true');
+  placeOnlineBtn.setAttribute('aria-pressed', online ? 'true' : 'false');
+  updateColorSelectorVisibility();
+  Online.show(online);
+  if (!quiet) initGame();
+}
+placeHereBtn.addEventListener('click', function () { if (opponentMode === 'online') setPlace(false); });
+placeOnlineBtn.addEventListener('click', function () { if (opponentMode !== 'online') setPlace(true); });
 
 // ...and the "Play as" colour menu
 if (playerColorSelect) {
@@ -2984,6 +3046,9 @@ var Online = (function () {
     panel: byId('onlinePanel'), setup: byId('onlineSetup'), session: byId('onlineSession'),
     name: byId('onlineName'), codeShown: byId('onlineCodeShown'), note: byId('onlineNote'),
     words: Array.prototype.slice.call(byId('onlineCode').querySelectorAll('input')),
+    choose: byId('onlineChoose'), form: byId('onlineForm'), startFields: byId('onlineStartFields'),
+    startMode: byId('onlineStartMode'), startColor: byId('onlineStartColor'), code: byId('onlineCode'),
+    create: byId('onlineCreate'), join: byId('onlineJoin'),
     next: byId('onlineNext'), nextMode: byId('onlineNextMode'), nextColor: byId('onlineNextColor'),
     newGame: byId('onlineNewGame'), state: byId('onlineState'), reconnect: byId('onlineReconnect'),
     reply: byId('onlineReply'), yes: byId('onlineYes'), swap: byId('onlineSwap'),
@@ -3018,9 +3083,23 @@ var Online = (function () {
   // Greys out the top-bar settings during an online game, so neither
   // player can change the game type or reset the board on their own
   function lockSettings(locked){
-    [modeSelect, opponentSelect, playerColorSelect, newGameBtn].forEach(function (control) {
+    [modeSelect, opponentSelect, playerColorSelect, newGameBtn, placeHereBtn, placeOnlineBtn].forEach(function (control) {
       control.disabled = locked;
     });
+  }
+
+  /* -- before a game: Start or Join -- */
+
+  // Shows step 1 (role null: the Start and Join buttons) or step 2 for
+  // 'create' (name, game, colour, Create) or 'join' (name, code, Join)
+  function chooseRole(role){
+    ui.choose.hidden = !!role;
+    ui.form.hidden = !role;
+    ui.startFields.hidden = ui.create.hidden = role !== 'create';
+    ui.code.hidden = ui.join.hidden = role !== 'join';
+    if (role === 'create') say('Pick the game and your colour, then tap Create game.');
+    else if (role === 'join') say("Type the four words of your friend's secret code, then tap Join game.");
+    else say("Start a new game, or join a friend's with their secret code.");
   }
 
   /* -- the four secret-code boxes -- */
@@ -3311,7 +3390,7 @@ var Online = (function () {
     if (!game && !msg.hasGame && !s.host) {
       say('Waiting for ' + s.peerName + ' to start a new game…');
     } else if (!game && !msg.hasGame) {
-      game = { mode: modeSelect.value, myColor: playerColor, moves: [], resigned: null };
+      game = { mode: modeSelect.value, myColor: ui.startColor.value, moves: [], resigned: null };
       resetBoard(game.mode);
       say('You both reloaded, so the last game was lost. New game with ' + s.peerName + '!');
     }
@@ -3425,10 +3504,8 @@ var Online = (function () {
     var saved;
     try { saved = JSON.parse(sessionStorage.getItem(REMEMBER)); } catch (e) { return; }
     if (!saved || typeof saved.code !== 'string' || session) return;
-    opponentSelect.value = 'online';
-    opponentMode = 'online';
-    updateColorSelectorVisibility();
-    show(true);
+    setPlace(true, true);
+    chooseRole('join');
     fillCode(saved.code);
     ui.name.value = cleanName(saved.name);
     // Always rejoin as the guest: the other player's page still has the
@@ -3663,10 +3740,10 @@ var Online = (function () {
       say('Online play needs a modern browser and a secure (https) page.');
       return;
     }
-    var code = readCode();
-    if (!code && role === 'create') code = SecretCode.generate();
+    // Start a game always makes a fresh code; joining uses the four boxes
+    var code = role === 'create' ? SecretCode.generate() : readCode();
     if (!SecretCode.isStrongEnough(code)) {
-      say('Fill in all four words (at least ' + SecretCode.MIN_LETTERS + ' letters in total), or tap 🎲.');
+      say('Fill in all four words of the secret code (at least ' + SecretCode.MIN_LETTERS + ' letters in total).');
       return;
     }
     fillCode(code);
@@ -3704,7 +3781,7 @@ var Online = (function () {
     remember();
 
     if (role === 'create') {
-      game = { mode: modeSelect.value, myColor: playerColor, moves: [], resigned: null };
+      game = { mode: ui.startMode.value, myColor: ui.startColor.value, moves: [], resigned: null };
       resetBoard(game.mode);
     } else {
       game = null;   // the creator's game arrives once we're connected
@@ -3732,6 +3809,7 @@ var Online = (function () {
     ui.chatLog.textContent = '';   // forget the chat
     lockSettings(false);
     showChoices();
+    chooseRole(null);
     say('You left the game. Nothing about it was saved.');
     initGame();
   }
@@ -3813,10 +3891,8 @@ var Online = (function () {
     history.replaceState(null, '', location.href.split('#')[0]);
     forget();   // a new invite replaces any game this tab remembered
     try { fillCode(decodeURIComponent(match[1])); } catch (e) { return; }
-    opponentSelect.value = 'online';
-    opponentMode = 'online';
-    updateColorSelectorVisibility();
-    show(true);
+    setPlace(true, true);
+    chooseRole('join');
     say("You've been invited! Type your name, then tap Join game.");
   }
   window.addEventListener('hashchange', readInvite);   // invite opened in a tab already showing the game
@@ -3844,7 +3920,10 @@ var Online = (function () {
   }
 
   // Connect each online button to what it does
-  byId('onlineDice').addEventListener('click', function () { fillCode(SecretCode.generate()); });
+  byId('onlineStartPick').addEventListener('click', function () { chooseRole('create'); });
+  byId('onlineJoinPick').addEventListener('click', function () { chooseRole('join'); });
+  byId('onlineBack').addEventListener('click', function () { chooseRole(null); });
+  chooseRole(null);   // start on step 1: the Start and Join buttons
   byId('onlineCreate').addEventListener('click', function () { begin('create'); });
   byId('onlineJoin').addEventListener('click', function () { begin('join'); });
   byId('onlineShare').addEventListener('click', share);
@@ -3938,13 +4017,13 @@ function initGame(){
     initCheckers();
   }
 }
-// When the page opens: if it was opened from an invite link, fill in the
-// code, or if this tab was in an online game before a reload, rejoin it;
-// show the online panel if "Online friend" is selected; draw a fresh
-// board; and make the New Game button start a new game.
+// When the page opens: start on "Play here"; if the page was opened from
+// an invite link, switch to Online and fill in the code, or if this tab
+// was in an online game before a reload, rejoin it; draw a fresh board;
+// and make the New Game button start a new game.
+setPlace(false, true);
 Online.readInvite();
 Online.resume();
-Online.show(opponentMode === 'online');
 initGame();
 newGameBtn.addEventListener('click', initGame);
 </script>
