@@ -142,6 +142,11 @@ header label{color:#a2a2c2;font-size:0.9rem;}
 #logo{width:120px;height:120px;border-radius:6px;
   -webkit-touch-callout:none;user-select:none;-webkit-user-select:none;}
 #logo.thinking{opacity:0.8;}   /* while a hint is being worked out */
+/* The menu button and summary are only for phones and tablets (see
+   "Phones and tablets" below). On bigger screens the wrapper around the
+   settings acts as if it weren't there ("display:contents"). */
+.menu-summary, .menu-toggle{display:none;}
+.menu-items{display:contents;}
 /* A label and its control stay together when the header wraps */
 .field{display:inline-flex;align-items:center;gap:0.3rem;white-space:nowrap;}
 /* "hidden" settings (e.g. Skill in 2-player mode) take up no space */
@@ -401,20 +406,44 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
 /* Everything inside "@media (max-width: 600px)" only applies on screens
    600 pixels wide or less, i.e. phones. It replaces some of the rules
    above with a layout that suits a narrow screen. */
-@media (max-width: 600px){
-  /* Logo on the left, settings in two tidy columns beside it */
+/* ---------- Phones and tablets ----------
+   Screens up to 1024 pixels wide, or any touch screen ("pointer: coarse",
+   which covers iPads of every size). The settings fold away behind a
+   Menu button so the board and chat get the room. The top bar shows
+   the logo, what's being played, and the button. Opening the menu shows
+   the settings, the online game's buttons (code, Share, new game,
+   Resign, Leave) and the note about encryption. Tapping the board or
+   any menu button folds it away again. */
+@media (max-width: 1024px), (pointer: coarse){
   header{
-    display:grid;grid-template-columns:56px 1fr 1fr;
-    gap:0.4rem 0.6rem;align-items:end;padding:0.5rem 0.75rem;
-    padding-top:calc(0.5rem + env(safe-area-inset-top));
+    gap:0.5rem 0.75rem;padding:0.4rem 0.75rem;
+    padding-top:calc(0.4rem + env(safe-area-inset-top));
   }
-  #logo{width:56px;height:56px;grid-row:span 3;align-self:start;}
+  #logo{width:44px;height:44px;}
+  .menu-summary{
+    display:block;flex:1;min-width:0;
+    color:#e6e6f0;font-weight:bold;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;   /* "…" if too long */
+  }
+  .menu-toggle{display:block;}
+  /* Menu closed: hide the settings, the online game's buttons, and the note */
+  .menu-items{display:none;}
+  #app:not(.menu-open) #onlineSession, #app:not(.menu-open) .online-note{display:none;}
+  /* Menu open: the settings in two tidy columns under the top bar */
+  .menu-open .menu-items{
+    display:grid;grid-template-columns:1fr 1fr;gap:0.4rem 0.6rem;
+    flex-basis:100%;align-items:end;
+  }
   /* Each label sits above its menu */
   .field{flex-direction:column;align-items:stretch;gap:2px;min-width:0;}
   .field label{font-size:0.8rem;}
   header select, header input[type="range"]{margin-left:0;width:100%;min-width:0;box-sizing:border-box;}
-  /* The New Game button stretches across both settings columns */
-  #newGame{grid-column:2 / -1;}
+  /* The New Game button stretches across both columns */
+  #newGame{grid-column:1 / -1;}
+  /* Only the last two chat messages, to leave room for the board */
+  .chat-log li:nth-last-child(n+3){display:none;}
+}
+@media (max-width: 600px){
   .online-panel{padding:0.5rem 0.75rem;}
   /* Your name, and then the four code words, each get a full-width row */
   #onlineName{flex:1 1 100%;width:auto;}
@@ -452,6 +481,15 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
          src="data:image/png;base64,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"
          alt="Logo">
 
+    <!-- Phones and tablets only: what's being played ("Chess · Online
+         friend") and the button that opens and closes the menu. On bigger
+         screens these stay hidden and the settings are always showing. -->
+    <span id="menuSummary" class="menu-summary"></span>
+    <button id="menuToggle" class="menu-toggle" aria-expanded="false" aria-controls="menuItems">☰ Menu</button>
+
+    <!-- The settings. On phones and tablets they only show while the
+         menu is open. -->
+    <div id="menuItems" class="menu-items">
     <!-- Which game: chess or checkers -->
     <span class="field">
       <label for="mode">Mode:</label>
@@ -495,6 +533,7 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
     </span>
     <!-- Starts the current game over from the beginning -->
     <button id="newGame">New Game</button>
+    </div>
   </header>
 
   <!-- ---------- Online play (shown only for "Online friend") ----------
@@ -520,7 +559,8 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
       <button id="onlineJoin">Join game</button>
     </div>
     <!-- During a game: the code, plus buttons to invite, propose a new
-         game, resign, reconnect after a dropout, or leave -->
+         game, resign or leave. On phones and tablets this row is part of
+         the menu. -->
     <div id="onlineSession" class="online-row" hidden>
       <span>Secret code: <code id="onlineCodeShown"></code></span>
       <button id="onlineShare" class="secondary">Share invite</button>
@@ -538,13 +578,16 @@ table.checkers td.last-move{box-shadow: inset 0 0 0 3px rgba(255,255,0,0.4);}
         <button id="onlineNewGame">Offer new game</button>
       </span>
       <button id="onlineResign" class="secondary">Resign</button>
-      <button id="onlineReconnect" hidden>Reconnect</button>
       <button id="onlineLeave" class="secondary">Leave</button>
     </div>
     <!-- One line saying what's happening ("Waiting for your friend…").
-         role="status" makes screen readers announce it when it changes. -->
-    <div id="onlineState" class="online-state" role="status">
-      Tap 🎲 and Create a game, or type your friend's secret code and Join.
+         role="status" makes screen readers announce it when it changes.
+         Reconnect appears beside it after a dropped connection. -->
+    <div class="online-row">
+      <div id="onlineState" class="online-state" role="status">
+        Tap 🎲 and Create a game, or type your friend's secret code and Join.
+      </div>
+      <button id="onlineReconnect" hidden>Reconnect</button>
     </div>
     <!-- Answers to the other player's new-game offer (or request). The host
          only sees Approve and Decline; the other player sees all four. -->
@@ -1429,6 +1472,36 @@ var boardTurnSelect = document.getElementById('boardTurn');
 var skillSlider    = document.getElementById('skill');
 var skillLabel     = document.getElementById('skillLabel');
 var newGameBtn     = document.getElementById('newGame');
+var appEl          = document.getElementById('app');
+var menuToggle     = document.getElementById('menuToggle');
+var menuSummary    = document.getElementById('menuSummary');
+
+// Phones and tablets: the Menu button opens and closes the settings (the
+// styles under "Phones and tablets" do the showing and hiding)
+function setMenu(open){
+  appEl.classList.toggle('menu-open', open);
+  menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  menuToggle.textContent = open ? '✕ Close' : '☰ Menu';
+}
+menuToggle.addEventListener('click', function () {
+  setMenu(!appEl.classList.contains('menu-open'));
+});
+// It folds away again after tapping a button in it (New Game, Share,
+// Leave, ...) or tapping the board
+document.addEventListener('click', function (e) {
+  if (e.target.closest('#menuItems button, #onlineSession button')) setMenu(false);
+});
+document.querySelector('main').addEventListener('pointerdown', function () { setMenu(false); });
+
+// The line in the top bar saying what's being played, e.g.
+// "Chess · Chessckers (Easy)". Kept up to date by the functions that
+// react to the menus (setSkillLabel, updateColorSelectorVisibility, showTab).
+function updateMenuSummary(){
+  var label = function (select) { return select.options[select.selectedIndex].textContent; };
+  var text = label(modeSelect) + ' · ' + label(opponentSelect);
+  if (opponentSelect.value === 'computer') text += ' (' + skillLabel.textContent + ')';
+  menuSummary.textContent = text;
+}
 
 // The current settings: who you're playing ('computer', 'human' for two
 // people on one screen, or 'online') and your colour ('white'/'black').
@@ -1440,6 +1513,7 @@ var playerColor = playerColorSelect ? playerColorSelect.value : 'white';
 function setSkillLabel(v){
   var names = ['Very Easy','Easy','Medium','Hard','Very Hard'];
   skillLabel.textContent = names[v-1];
+  updateMenuSummary();
 }
 setSkillLabel(skillSlider.value);
 // "addEventListener" means: when this happens, run these steps. Here,
@@ -1454,6 +1528,7 @@ function updateColorSelectorVisibility(){
   colorField.hidden = opponentMode === 'human';
   skillField.hidden = opponentMode !== 'computer';
   boardTurnField.hidden = opponentMode !== 'human';
+  updateMenuSummary();
 }
 updateColorSelectorVisibility();
 
@@ -1499,6 +1574,7 @@ function idlePrompt(){
 
 // Switches between the chess and checkers boards, and starts a new game
 function showTab(mode){
+  updateMenuSummary();
   // Hide all tabs
   var tabs = document.querySelectorAll('.tab');
   for (var i = 0; i < tabs.length; i++) {
