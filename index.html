@@ -234,8 +234,11 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
 .chessboard .square{
   width:var(--square);height:var(--square);
   display:flex;align-items:center;justify-content:center;
-  /* fonts that include the chess symbols, in order of preference */
-  font-family: "Segoe UI Symbol","Noto Sans Symbols","Apple Color Emoji","Segoe UI Emoji",system-ui,sans-serif;
+  /* fonts that include the chess symbols (Apple, Windows, Linux), so all
+     six pieces come from the same font. No emoji fonts: the pawn ♟ is also
+     an emoji, and an emoji font would draw it as a picture that doesn't
+     match the other pieces. */
+  font-family: "Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2","Noto Sans Symbols",system-ui,sans-serif;
   cursor:pointer;
   transition: background 0.15s;   /* colour changes fade in quickly */
   user-select:none;               /* tapping doesn't select the symbol as text */
@@ -263,7 +266,11 @@ main{flex:1;display:flex;justify-content:center;align-items:center;
 .chessboard .piece{
   font-size:var(--piece);
   line-height:1;
+  color:#111;
 }
+/* Both sides use the same solid shapes (see pieceUnicode). White's are
+   filled white with a thin dark edge so they stand out on light squares. */
+.chessboard .piece.white-piece{color:#fff;-webkit-text-stroke:0.03em #222;}
 /* A piece grows slightly while it's being pressed */
 .chessboard .piece:active{transform:scale(1.1);}
 
@@ -1554,15 +1561,14 @@ var chessStatus = document.getElementById('chessStatus');
 var moveNotation = document.getElementById('moveNotation');
 
 // The symbol to show for a piece. Chess symbols are ordinary text
-// characters (♔ ♕ ♖ ...), so no images are needed. Capital letters are
-// White's pieces (outlined symbols), small letters Black's (filled).
+// characters (♚ ♛ ♜ ...), so no images are needed. Both sides use the
+// solid symbols; the colour comes from the "white-piece" style. (The
+// outlined white symbols ♔ ♕ ♖ are thin line drawings that look weaker.)
+// The pawn gets an invisible "\uFE0E" after it, which means "show as text,
+// not as an emoji": ♟ is the one chess symbol that's also an emoji.
 function pieceUnicode(piece){
-  var key = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
-  var map = {
-    'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙',
-    'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'
-  };
-  return map[key] || '';
+  var map = { 'k':'♚', 'q':'♛', 'r':'♜', 'b':'♝', 'n':'♞', 'p':'♟\uFE0E' };
+  return map[piece.type] || '';
 }
 
 // A piece's name in words, for messages like "Pawn E2 to E4"
@@ -1677,7 +1683,7 @@ function renderChessBoard(){
       var piece = board[r][c];
       if (piece) {
         var span = document.createElement('span');
-        span.className = 'piece';
+        span.className = piece.color === 'w' ? 'piece white-piece' : 'piece';
         span.textContent = pieceUnicode(piece);
         sqDiv.appendChild(span);
       }
