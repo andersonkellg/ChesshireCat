@@ -2939,17 +2939,19 @@ function moveKey(mode, m){
    the rest of the page can only use the few functions listed in the
    "return { ... }" at the very end. */
 var Online = (function () {
-  var PROTOCOL = 5;        // bump if the message format or the rules change
+  var PROTOCOL = 6;        // bump if the message format or the rules change
   var MAX_MOVES = 2000;    // longest game history we'll accept from the other player
   var PING_MS = 20000;     // keep-alive; the relay frees seats silent for a minute
   var MODES = ['chess', 'checkers'];
   var CHAT_LINES = 4;      // how many recent chat messages stay on screen
   // The chat menu. With FREE_CHAT off, these are the ONLY messages this
   // page will send or show: anything else from the other player is
-  // ignored, even if their copy of the page was changed.
+  // ignored, even if their copy of the page was changed. (Changing this
+  // list? Bump PROTOCOL too, or an older copy would quietly drop the new
+  // phrases.)
   var CHAT_PHRASES = [
     'Hi!', 'Be right back', "I'm back", 'Thinking…', 'Your move', 'Good move!',
-    'Oops!', 'Nice try', 'Good game', 'Rematch?', 'Thanks!', 'Bye!'
+    'Oops!', 'Nice try', 'Good game', 'Rematch?', 'OK', 'No thanks', 'Thanks!', 'Bye!'
   ];
   // true also shows a box for typing your own message (CHAT_CHARS at most)
   // and shows the other player's typed messages
